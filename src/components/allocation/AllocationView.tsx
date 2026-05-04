@@ -24,15 +24,137 @@ export type AllocationFilters = {
   teammateRole: Set<string>;
 };
 
-const DEFAULT_FILTERS: AllocationFilters = {
-  projectStatus: new Set(["Active"]),
-  projectLeadId: new Set(),
-  projectName: "",
-  teammateStatus: new Set(["Active"]),
-  teammateId: new Set(),
-  teammateRole: new Set(),
-  teammateLevel: new Set(),
+function defaultFilters(): AllocationFilters {
+  return {
+    projectStatus: new Set(),
+    projectLeadId: new Set(),
+    projectName: "",
+    teammateStatus: new Set(),
+    teammateId: new Set(),
+    teammateRole: new Set(),
+    teammateLevel: new Set(),
+  };
+}
+
+// Filter <-> URL serialization. Defaults are all empty, so a missing key
+// unambiguously means "no filter" — no sentinel needed.
+const FILTER_PARAM_KEYS = [
+  "projectStatus",
+  "projectLead",
+  "projectName",
+  "teamStatus",
+  "team",
+  "teamLevel",
+  "teamRole",
+] as const;
+
+function parseFiltersFromSearch(search: string): AllocationFilters {
+  const params = new URLSearchParams(search);
+  const setFromParam = (key: string) => {
+    const v = params.get(key);
+    return new Set(v ? v.split(",").filter(Boolean) : []);
+  };
+  return {
+    projectStatus: setFromParam("projectStatus"),
+    projectLeadId: setFromParam("projectLead"),
+    projectName: params.get("projectName") ?? "",
+    teammateStatus: setFromParam("teamStatus"),
+    teammateId: setFromParam("team"),
+    teammateLevel: setFromParam("teamLevel"),
+    teammateRole: setFromParam("teamRole"),
+  };
+}
+
+function writeFiltersToUrl(filters: AllocationFilters) {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  for (const k of FILTER_PARAM_KEYS) params.delete(k);
+  const setParam = (key: string, s: Set<string>) => {
+    if (s.size > 0) params.set(key, Array.from(s).join(","));
+  };
+  setParam("projectStatus", filters.projectStatus);
+  setParam("projectLead", filters.projectLeadId);
+  setParam("teamStatus", filters.teammateStatus);
+  setParam("team", filters.teammateId);
+  setParam("teamLevel", filters.teammateLevel);
+  setParam("teamRole", filters.teammateRole);
+  if (filters.projectName) params.set("projectName", filters.projectName);
+  const qs = params.toString();
+  const next = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+  if (next !== window.location.pathname + window.location.search + window.location.hash) {
+    window.history.replaceState(null, "", next);
+  }
+}
+
+// View-option toggles. Each key is omitted when its value matches the
+// default; presence with "1"/"0" overrides the default. Defaults differ per
+// option (notably `tt` is on by default), so we keep both directions.
+type ViewOptions = {
+  showProjectDetails: boolean;
+  showProjectTotals: boolean;
+  projectTotalsOnly: boolean;
+  showTotals: boolean;
+  totalsOnly: boolean;
 };
+
+const VIEW_OPTION_KEYS = [
+  "showDetails",
+  "showProjectTotals",
+  "projectTotalsOnly",
+  "showTeamTotals",
+  "teamTotalsOnly",
+] as const;
+
+const VIEW_OPTION_DEFAULTS: ViewOptions = {
+  showProjectDetails: false,
+  showProjectTotals: false,
+  projectTotalsOnly: false,
+  showTotals: true,
+  totalsOnly: false,
+};
+
+function parseViewOptionsFromSearch(search: string): ViewOptions {
+  const params = new URLSearchParams(search);
+  const flag = (key: string, def: boolean): boolean => {
+    const v = params.get(key);
+    if (v === "1") return true;
+    if (v === "0") return false;
+    return def;
+  };
+  return {
+    showProjectDetails: flag("showDetails", VIEW_OPTION_DEFAULTS.showProjectDetails),
+    showProjectTotals: flag("showProjectTotals", VIEW_OPTION_DEFAULTS.showProjectTotals),
+    projectTotalsOnly: flag("projectTotalsOnly", VIEW_OPTION_DEFAULTS.projectTotalsOnly),
+    showTotals: flag("showTeamTotals", VIEW_OPTION_DEFAULTS.showTotals),
+    totalsOnly: flag("teamTotalsOnly", VIEW_OPTION_DEFAULTS.totalsOnly),
+  };
+}
+
+function writeViewOptionsToUrl(opts: ViewOptions) {
+  if (typeof window === "undefined") return;
+  const params = new URLSearchParams(window.location.search);
+  for (const k of VIEW_OPTION_KEYS) params.delete(k);
+  if (opts.showProjectDetails !== VIEW_OPTION_DEFAULTS.showProjectDetails) {
+    params.set("showDetails", opts.showProjectDetails ? "1" : "0");
+  }
+  if (opts.showProjectTotals !== VIEW_OPTION_DEFAULTS.showProjectTotals) {
+    params.set("showProjectTotals", opts.showProjectTotals ? "1" : "0");
+  }
+  if (opts.projectTotalsOnly !== VIEW_OPTION_DEFAULTS.projectTotalsOnly) {
+    params.set("projectTotalsOnly", opts.projectTotalsOnly ? "1" : "0");
+  }
+  if (opts.showTotals !== VIEW_OPTION_DEFAULTS.showTotals) {
+    params.set("showTeamTotals", opts.showTotals ? "1" : "0");
+  }
+  if (opts.totalsOnly !== VIEW_OPTION_DEFAULTS.totalsOnly) {
+    params.set("teamTotalsOnly", opts.totalsOnly ? "1" : "0");
+  }
+  const qs = params.toString();
+  const next = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+  if (next !== window.location.pathname + window.location.search + window.location.hash) {
+    window.history.replaceState(null, "", next);
+  }
+}
 
 interface Props {
   projects: Project[];
@@ -63,12 +185,40 @@ export default function AllocationView({
     for (const ws of rawWeekStarts) merged.add(ws);
     return Array.from(merged).sort();
   }, [rawWeekStarts]);
-  const [filters, setFilters] = useState<AllocationFilters>({ ...DEFAULT_FILTERS });
-  const [showProjectDetails, setShowProjectDetails] = useState(false);
-  const [showTotals, setShowTotals] = useState(true);
-  const [showProjectTotals, setShowProjectTotals] = useState(false);
-  const [totalsOnly, setTotalsOnly] = useState(false);
-  const [projectTotalsOnly, setProjectTotalsOnly] = useState(false);
+  // Lazy init from URL. AllocationView only mounts after data has loaded
+  // (see page.tsx), which is past initial hydration, so reading window here
+  // doesn't risk a hydration mismatch.
+  const [filters, setFilters] = useState<AllocationFilters>(() =>
+    typeof window === "undefined"
+      ? defaultFilters()
+      : parseFiltersFromSearch(window.location.search)
+  );
+
+  useEffect(() => {
+    writeFiltersToUrl(filters);
+  }, [filters]);
+
+  // Lazy init view options from URL once on mount (mirrors filters above).
+  const [viewOptionsInit] = useState<ViewOptions>(() =>
+    typeof window === "undefined"
+      ? VIEW_OPTION_DEFAULTS
+      : parseViewOptionsFromSearch(window.location.search)
+  );
+  const [showProjectDetails, setShowProjectDetails] = useState(viewOptionsInit.showProjectDetails);
+  const [showTotals, setShowTotals] = useState(viewOptionsInit.showTotals);
+  const [showProjectTotals, setShowProjectTotals] = useState(viewOptionsInit.showProjectTotals);
+  const [totalsOnly, setTotalsOnly] = useState(viewOptionsInit.totalsOnly);
+  const [projectTotalsOnly, setProjectTotalsOnly] = useState(viewOptionsInit.projectTotalsOnly);
+
+  useEffect(() => {
+    writeViewOptionsToUrl({
+      showProjectDetails,
+      showProjectTotals,
+      projectTotalsOnly,
+      showTotals,
+      totalsOnly,
+    });
+  }, [showProjectDetails, showProjectTotals, projectTotalsOnly, showTotals, totalsOnly]);
   const [addedPairs, setAddedPairs] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
