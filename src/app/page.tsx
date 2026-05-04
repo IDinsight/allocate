@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import ProjectsSidebar from "@/components/ProjectsSidebar";
 import TeammatesSidebar from "@/components/TeammatesSidebar";
 import WatermarkBackground from "@/components/WatermarkBackground";
@@ -14,7 +14,25 @@ import type { Allocation } from "@/components/allocation/ProjectSection";
 export default function Home() {
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
-  const [activeView, setActiveView] = useState<"project" | "teammate">("project");
+  // useSearchParams (vs window.location) returns the same value on server
+  // and client during SSR, so lazy-init from it doesn't cause a hydration
+  // mismatch. Requires the Suspense boundary in layout.tsx.
+  const searchParams = useSearchParams();
+  const [activeView, setActiveView] = useState<"project" | "teammate">(() =>
+    searchParams.get("view") === "teammate" ? "teammate" : "project"
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (activeView === "teammate") params.set("view", "teammate");
+    else params.delete("view");
+    const qs = params.toString();
+    const next = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
+    if (next !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [activeView]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [teammates, setTeammates] = useState<Teammate[]>([]);
   const [allocations, setAllocations] = useState<Allocation[]>([]);

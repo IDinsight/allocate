@@ -288,19 +288,23 @@ export default function DateHeader({
             );
           })}
 
-          {/* Toggle: show alumni */}
+          {/* Toggle: hide alumni (active = filtering teammate status to Active only) */}
           <Chip
-            active={filters.teammateStatus.size === 0}
+            active={filters.teammateStatus.has("Active") && filters.teammateStatus.size === 1}
             activeColor="bg-green-100"
             activeTextColor="text-green-800"
-            onClick={() => onFilterChange(
-              "teammateStatus",
-              filters.teammateStatus.size === 0 ? new Set(["Active"]) : new Set()
-            )}
+            onClick={() =>
+              onFilterChange(
+                "teammateStatus",
+                filters.teammateStatus.has("Active") && filters.teammateStatus.size === 1
+                  ? new Set()
+                  : new Set(["Active"])
+              )
+            }
           >
-            Alumni
-            {filters.teammateStatus.size === 0 && (
-              <ClearButton onClick={() => onFilterChange("teammateStatus", new Set(["Active"]))} />
+            Hide alumni
+            {filters.teammateStatus.has("Active") && filters.teammateStatus.size === 1 && (
+              <ClearButton onClick={() => onFilterChange("teammateStatus", new Set())} />
             )}
           </Chip>
 
