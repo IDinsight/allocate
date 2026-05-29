@@ -104,7 +104,7 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
   const isPreview = previewFraction !== undefined;
   const showFraction = isPreview ? previewFraction : fraction;
   const displayValue =
-    showFraction != null && showFraction > 0
+    showFraction != null && showFraction >= 0
       ? (showFraction / 100).toFixed(showFraction % 10 === 0 ? 1 : 2)
       : "";
 
@@ -126,7 +126,7 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
       return;
     }
     const parsed = parseFloat(trimmed);
-    if (isNaN(parsed) || parsed <= 0) return reject();
+    if (isNaN(parsed) || parsed < 0) return reject();
     const intVal = Math.round(parsed * 100);
     setMode("idle");
     if (intVal !== fraction) onEdit(intVal);
