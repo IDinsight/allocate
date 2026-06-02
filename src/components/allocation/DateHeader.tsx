@@ -222,13 +222,14 @@ export default function DateHeader({
             </Chip>
           )}
 
-          {/* Search: project name (project view only) */}
-          {activeView !== "teammate" && (searchActive ? (
+          {/* Search: project name (both views) */}
+          {searchActive ? (
             <div className={`${CHIP_BASE} chip-filter-active bg-orange-100 text-orange-900`}>
               <Search size={12} strokeWidth={4} />
               {searchFocused ? (
                 <input
-                  className="bg-transparent outline-none w-20 text-xs"
+                  className="bg-transparent outline-none w-20 text-xs placeholder:text-orange-900/40"
+                  placeholder="Projects"
                   value={filters.projectName}
                   onChange={(e) => onFilterChange("projectName", e.target.value)}
                   onBlur={closeSearch}
@@ -250,8 +251,9 @@ export default function DateHeader({
           ) : (
             <div className={`${CHIP_BASE} bg-white text-zinc-800`} onClick={() => { setOpenFilter("projectName"); setSearchFocused(true); }}>
               <Search size={12} strokeWidth={4} />
+              <span>Projects</span>
             </div>
-          ))}
+          )}
 
           {/* Multi-select filters */}
           {filterDefs.map((def) => {
