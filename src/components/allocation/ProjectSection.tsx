@@ -105,6 +105,12 @@ export default function ProjectSection({
   if (teammateIdFilter && teammateIdFilter.size > 0) {
     projectTeammates = projectTeammates.filter((t) => teammateIdFilter.has(t.id));
   }
+  // When a team filter is active, hide projects that have no matching teammate
+  // (mirrors TeammateSection hiding teammates with no matching projects). Empty
+  // projects still show when no team filter is set, so they can be added to.
+  const hasTeammateFilter =
+    (teammateIdFilter?.size ?? 0) > 0 || (teammateStatusFilter?.size ?? 0) > 0;
+  if (hasTeammateFilter && projectTeammates.length === 0 && !adding) return null;
   const statusColors = STATUS_COLORS[project.status as keyof typeof STATUS_COLORS];
 
   // Teammates available to add (not already on this project)
