@@ -181,7 +181,7 @@ export default function Home() {
         ) : dataLoading ? (
           <div className="flex h-full items-center justify-center">
             <div className="wavy-loader flex gap-1.5 text-md font-black">
-              {Array.from({ length: 6 }, () => [..."LOADING"]).flat().map((ch, i) => (
+              {Array.from({ length: 3 }, () => [..."LOADING"]).flat().map((ch, i) => (
                 <span
                   key={i}
                   style={{
