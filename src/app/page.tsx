@@ -10,7 +10,7 @@ import AllocationView from "@/components/allocation/AllocationView";
 import type { Project } from "@/components/ProjectsSidebar";
 import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
-import { trackWrite, hasPendingWrites, isBusy, POLL_INTERVAL_MS } from "@/lib/liveSync";
+import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration, POLL_INTERVAL_MS } from "@/lib/liveSync";
 
 export default function Home() {
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -115,11 +115,15 @@ export default function Home() {
     router.push("/login");
   };
 
-  const fetchAll = useCallback(async (silent = false) => {
+  // Returns true if fresh data was applied, false if it was skipped (stale) or
+  // errored — the caller uses this to decide whether to advance its version ref.
+  const fetchAll = useCallback(async (silent = false): Promise<boolean> => {
     if (!silent) {
       setDataLoading(true);
       setLoadError(false);
     }
+    // Snapshot the write generation so we can detect edits made while fetching.
+    const genAtStart = getWriteGeneration();
     try {
       const [projRes, teamRes, allocRes] = await Promise.all([
         fetch("/api/projects"),
@@ -129,17 +133,28 @@ export default function Home() {
       if (!projRes.ok || !teamRes.ok || !allocRes.ok) {
         if (!silent) setLoadError(true);
         if (!silent) setDataLoading(false);
-        return;
+        return false;
       }
-      setProjects(await projRes.json());
-      setTeammates(await teamRes.json());
+      const projData = await projRes.json();
+      const teamData = await teamRes.json();
       const data = await allocRes.json();
+      // For background refetches, drop the snapshot if a write started or is
+      // still pending — it could predate the user's latest edit and would flash
+      // an old value over their change. The next poll will pick up the change.
+      if (silent && (getWriteGeneration() !== genAtStart || isBusy())) {
+        return false;
+      }
+      setProjects(projData);
+      setTeammates(teamData);
       setAllocations(data.allocations);
       setWeekStarts(data.weekStarts);
     } catch {
       if (!silent) setLoadError(true);
+      if (!silent) setDataLoading(false);
+      return false;
     }
     if (!silent) setDataLoading(false);
+    return true;
   }, []);
 
   // A write failed (or never reached the server). Snap state back to the
@@ -170,8 +185,10 @@ export default function Home() {
         if (!res.ok) return;
         const v = await res.json();
         if (v.data !== dataVersionRef.current) {
-          dataVersionRef.current = v.data;
-          fetchAll(true);
+          // Only advance the version ref if the refetch actually applied — if it
+          // was dropped as stale (edit raced it), retry on the next tick.
+          const applied = await fetchAll(true);
+          if (applied) dataVersionRef.current = v.data;
         }
       } catch {
         // Network blip — try again next tick.

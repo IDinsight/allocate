@@ -15,6 +15,10 @@ export const POLL_INTERVAL_MS = 1000;
 
 let pendingWrites = 0;
 let activeEdits = 0;
+// Bumped every time a write starts. A background refetch captures this before
+// fetching and re-checks it before applying: if it changed, the user edited
+// something mid-fetch and the fetched snapshot may be stale, so it's dropped.
+let writeGeneration = 0;
 
 /**
  * Wrap a mutation request so live-sync polling (and the unload guard) know a
@@ -22,12 +26,18 @@ let activeEdits = 0;
  */
 export function trackWrite<T>(p: Promise<T>): Promise<T> {
   pendingWrites++;
+  writeGeneration++;
   // Decrement once settled. Swallow rejection on this branch only — the
   // original promise `p` is returned untouched for the caller to handle.
   p.finally(() => {
     pendingWrites--;
   }).catch(() => {});
   return p;
+}
+
+/** Monotonic counter of writes started — for stale-snapshot detection. */
+export function getWriteGeneration(): number {
+  return writeGeneration;
 }
 
 /** True while any mutation request is in flight. */
