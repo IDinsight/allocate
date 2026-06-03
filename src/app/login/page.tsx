@@ -76,7 +76,7 @@ export default function LoginPage() {
               className={`wavy-loader flex gap-0.5 text-2xl font-bold text-zinc-900 transition-all duration-300 cursor-default select-none ${hovering ? "opacity-0 scale-90" : "opacity-100 scale-100"
                 }`}
             >
-              {"A          L          L          O          C          A          T          E".split("").map((ch, i) => (
+              {"C  L  I  C  K      H  E  R  E    F  O  R    A  L  L  O  C  A  T  E".split("").map((ch, i) => (
                 <span key={i} style={{ animationDelay: `${i * 0.02}s` }}>{ch}</span>
               ))}
             </h1>
