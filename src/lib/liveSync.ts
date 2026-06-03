@@ -20,10 +20,8 @@ let activeEdits = 0;
 // something mid-fetch and the fetched snapshot may be stale, so it's dropped.
 let writeGeneration = 0;
 
-/**
- * Wrap a mutation request so live-sync polling (and the unload guard) know a
- * write is in flight. Returns the same promise, so callers can still await it.
- */
+// Wrap a mutation request so live-sync polling (and the unload guard) know a
+// write is in flight. Returns the same promise, so callers can still await it.
 export function trackWrite<T>(p: Promise<T>): Promise<T> {
   pendingWrites++;
   writeGeneration++;
@@ -35,17 +33,17 @@ export function trackWrite<T>(p: Promise<T>): Promise<T> {
   return p;
 }
 
-/** Monotonic counter of writes started — for stale-snapshot detection. */
+// Monotonic counter of writes started — for stale-snapshot detection.
 export function getWriteGeneration(): number {
   return writeGeneration;
 }
 
-/** True while any mutation request is in flight. */
+// True while any mutation request is in flight.
 export function hasPendingWrites(): boolean {
   return pendingWrites > 0;
 }
 
-/** Call when a cell enters edit mode; the returned fn ends the edit. */
+// Call when a cell enters edit mode; the returned fn ends the edit.
 export function beginEditing(): () => void {
   activeEdits++;
   let ended = false;
@@ -56,7 +54,7 @@ export function beginEditing(): () => void {
   };
 }
 
-/** True while a write is in flight or a cell is being actively edited. */
+// True while a write is in flight or a cell is being actively edited.
 export function isBusy(): boolean {
   return pendingWrites > 0 || activeEdits > 0;
 }

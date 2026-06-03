@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { POLL_INTERVAL_MS } from "@/lib/liveSync";
+import usePolling from "@/hooks/usePolling";
 
 const WIDTH = 450;
 const HEIGHT = 500;
@@ -68,31 +68,26 @@ export default function Notepad() {
   // content when it actually changed on the server. Only apply the server value
   // when the user isn't actively editing (textarea unfocused, no save in
   // flight, no unsaved local change) so we never wipe what they're typing.
-  useEffect(() => {
-    if (!loaded) return;
-    const id = window.setInterval(async () => {
-      if (document.visibilityState !== "visible") return;
-      if (document.activeElement === textareaRef.current) return;
-      if (savingRef.current) return;
-      if (notes !== lastSyncedRef.current) return; // unsaved local edit pending
-      try {
-        const vRes = await fetch("/api/version");
-        if (!vRes.ok) return;
-        const v = await vRes.json();
-        if (v.notepad === versionRef.current) return; // unchanged
-        const d = await fetch("/api/notepad").then((r) => r.json());
-        versionRef.current = d.updatedAt ?? "";
-        const content = d.content ?? "";
-        if (content !== lastSyncedRef.current) {
-          lastSyncedRef.current = content;
-          setNotes(content);
-        }
-      } catch {
-        // Network blip — try again next tick.
+  usePolling(async () => {
+    if (document.activeElement === textareaRef.current) return;
+    if (savingRef.current) return;
+    if (notes !== lastSyncedRef.current) return; // unsaved local edit pending
+    try {
+      const vRes = await fetch("/api/version");
+      if (!vRes.ok) return;
+      const v = await vRes.json();
+      if (v.notepad === versionRef.current) return; // unchanged
+      const d = await fetch("/api/notepad").then((r) => r.json());
+      versionRef.current = d.updatedAt ?? "";
+      const content = d.content ?? "";
+      if (content !== lastSyncedRef.current) {
+        lastSyncedRef.current = content;
+        setNotes(content);
       }
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [loaded, notes]);
+    } catch {
+      // Network blip — try again next tick.
+    }
+  }, loaded);
 
   useEffect(() => {
     if (open && textareaRef.current) {

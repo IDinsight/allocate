@@ -10,7 +10,8 @@ import AllocationView from "@/components/allocation/AllocationView";
 import type { Project } from "@/components/ProjectsSidebar";
 import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
-import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration, POLL_INTERVAL_MS } from "@/lib/liveSync";
+import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration } from "@/lib/liveSync";
+import usePolling from "@/hooks/usePolling";
 
 export default function Home() {
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -163,7 +164,7 @@ export default function Home() {
   const reportSaveFailure = useCallback(() => {
     setSaveError(true);
     fetchAll(true);
-    window.setTimeout(() => setSaveError(false), 4000);
+    setTimeout(() => setSaveError(false), 4000);
   }, [fetchAll]);
 
   useEffect(() => {
@@ -171,31 +172,26 @@ export default function Home() {
   }, [fetchAll]);
 
   // Live sync: poll the tiny /api/version signature and only run the heavy
-  // fetchAll when the data actually changed. Skip a tick while the tab is
-  // hidden, a sidebar is open (draft rows would be wiped), or a write/cell-edit
-  // is in progress — see src/lib/liveSync.ts.
-  useEffect(() => {
-    if (dataLoading || loadError) return;
-    const id = window.setInterval(async () => {
-      if (document.visibilityState !== "visible") return;
-      if (projectsOpen || teammatesOpen) return;
-      if (isBusy()) return;
-      try {
-        const res = await fetch("/api/version");
-        if (!res.ok) return;
-        const v = await res.json();
-        if (v.data !== dataVersionRef.current) {
-          // Only advance the version ref if the refetch actually applied — if it
-          // was dropped as stale (edit raced it), retry on the next tick.
-          const applied = await fetchAll(true);
-          if (applied) dataVersionRef.current = v.data;
-        }
-      } catch {
-        // Network blip — try again next tick.
+  // fetchAll when the data actually changed. Skip a tick while a sidebar is open
+  // (draft rows would be wiped) or a write/cell-edit is in progress — see
+  // src/lib/liveSync.ts.
+  usePolling(async () => {
+    if (projectsOpen || teammatesOpen) return;
+    if (isBusy()) return;
+    try {
+      const res = await fetch("/api/version");
+      if (!res.ok) return;
+      const v = await res.json();
+      if (v.data !== dataVersionRef.current) {
+        // Only advance the version ref if the refetch actually applied — if it
+        // was dropped as stale (edit raced it), retry on the next tick.
+        const applied = await fetchAll(true);
+        if (applied) dataVersionRef.current = v.data;
       }
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [dataLoading, loadError, projectsOpen, teammatesOpen, fetchAll]);
+    } catch {
+      // Network blip — try again next tick.
+    }
+  }, !dataLoading && !loadError);
 
   // Warn before leaving if a write is still in flight, so a refresh mid-save
   // isn't silent. (keepalive should still deliver it, but this is a backstop.)
