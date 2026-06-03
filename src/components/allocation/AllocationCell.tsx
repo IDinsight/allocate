@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState, useRef, useEffect } from "react";
+import { beginEditing } from "@/lib/liveSync";
 
 const CELL_WIDTH = 56;
 const CELL_ATTR = "data-alloc-col";
@@ -99,7 +100,18 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
   const [mode, setMode] = useState<"idle" | "selected" | "editing">("idle");
   const [draft, setDraft] = useState("");
   const [flashRed, setFlashRed] = useState(false);
+  const [flashGreen, setFlashGreen] = useState(false);
+  const [prevFraction, setPrevFraction] = useState(fraction);
   const cellRef = useRef<HTMLDivElement>(null);
+
+  // Flash green whenever the value changes after mount (e.g. a live-sync update
+  // from someone else, or a committed edit) so updates are easy to spot. This
+  // is React's recommended "adjust state when a prop changes during render"
+  // pattern; onAnimationEnd clears the flag.
+  if (prevFraction !== fraction) {
+    setPrevFraction(fraction);
+    setFlashGreen(true);
+  }
 
   const isPreview = previewFraction !== undefined;
   const showFraction = isPreview ? previewFraction : fraction;
@@ -155,6 +167,13 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
     // Scroll into view ourselves, accounting for sticky left panel
     scrollCellIntoView(target);
   };
+
+  // Tell live-sync a cell is being edited so polling doesn't refetch and wipe
+  // the in-progress edit. Cleanup runs when leaving edit mode or unmounting.
+  useEffect(() => {
+    if (mode !== "editing") return;
+    return beginEditing();
+  }, [mode]);
 
   // Listen for "enter editing" event from navigation
   useEffect(() => {
@@ -250,11 +269,15 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
         borderBottomWidth: isPreview ? 2 : undefined,
         borderBottomStyle: isPreview ? "solid" : undefined,
         borderBottomColor: isPreview ? "rgb(117, 117, 117)" : undefined,
-        animation: flashRed ? "cellFlashRed 0.4s ease-out" : undefined,
+        animation: flashRed
+          ? "cellFlashRed 0.6s ease-out"
+          : flashGreen
+            ? "cellFlashGreen 0.6s ease-out"
+            : undefined,
         outline: mode === "selected" ? "2px solid #7c3aed" : undefined,
         outlineOffset: "-2px",
       }}
-      onAnimationEnd={() => setFlashRed(false)}
+      onAnimationEnd={() => { setFlashRed(false); setFlashGreen(false); }}
       className={`flex items-center justify-center text-sm cursor-pointer select-none transition-colors hover:bg-violet-100/60 h-full border-b-1 border-zinc-200 box-border ${borderClass}`}
       onClick={() => {
         if (mode !== "selected") setMode("selected");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProjectsSidebar from "@/components/ProjectsSidebar";
 import TeammatesSidebar from "@/components/TeammatesSidebar";
@@ -10,6 +10,7 @@ import AllocationView from "@/components/allocation/AllocationView";
 import type { Project } from "@/components/ProjectsSidebar";
 import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
+import { trackWrite, hasPendingWrites, isBusy, POLL_INTERVAL_MS } from "@/lib/liveSync";
 
 export default function Home() {
   const [projectsOpen, setProjectsOpen] = useState(false);
@@ -39,6 +40,10 @@ export default function Home() {
   const [weekStarts, setWeekStarts] = useState<string[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  // Last data signature we've loaded, from /api/version — lets the poller skip
+  // the heavy refetch when nothing has changed.
+  const dataVersionRef = useRef<string | null>(null);
   const router = useRouter();
 
   const handleCellEdit = async (
@@ -48,43 +53,60 @@ export default function Home() {
     fraction: number | null,
     existingId: string | undefined
   ) => {
-    if (fraction === null && existingId) {
-      // Delete
-      setAllocations((prev) => prev.filter((a) => a.id !== existingId));
-      await fetch(`/api/allocations/${existingId}`, { method: "DELETE" });
-    } else if (existingId && fraction != null) {
-      // Update
-      setAllocations((prev) =>
-        prev.map((a) => (a.id === existingId ? { ...a, fraction } : a))
-      );
-      await fetch(`/api/allocations/${existingId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fraction }),
-      });
-    } else if (fraction != null) {
-      // Create
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const newAlloc: Allocation = {
-        id: tempId,
-        projectId,
-        teammateId,
-        weekStart,
-        fraction,
-        isHidden: false,
-      };
-      setAllocations((prev) => [...prev, newAlloc]);
-      const res = await fetch("/api/allocations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, teammateId, weekStart, fraction }),
-      });
-      if (res.ok) {
+    // Each branch updates local state optimistically, then awaits the write.
+    // `keepalive` lets the request finish even if the tab is reloading, and a
+    // non-ok/failed write resyncs to the database truth instead of leaving a
+    // phantom change on screen.
+    try {
+      if (fraction === null && existingId) {
+        // Delete
+        setAllocations((prev) => prev.filter((a) => a.id !== existingId));
+        const res = await trackWrite(
+          fetch(`/api/allocations/${existingId}`, { method: "DELETE", keepalive: true })
+        );
+        if (!res.ok) throw new Error("delete failed");
+      } else if (existingId && fraction != null) {
+        // Update
+        setAllocations((prev) =>
+          prev.map((a) => (a.id === existingId ? { ...a, fraction } : a))
+        );
+        const res = await trackWrite(
+          fetch(`/api/allocations/${existingId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fraction }),
+            keepalive: true,
+          })
+        );
+        if (!res.ok) throw new Error("update failed");
+      } else if (fraction != null) {
+        // Create
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const newAlloc: Allocation = {
+          id: tempId,
+          projectId,
+          teammateId,
+          weekStart,
+          fraction,
+          isHidden: false,
+        };
+        setAllocations((prev) => [...prev, newAlloc]);
+        const res = await trackWrite(
+          fetch("/api/allocations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ projectId, teammateId, weekStart, fraction }),
+            keepalive: true,
+          })
+        );
+        if (!res.ok) throw new Error("create failed");
         const created = await res.json();
         setAllocations((prev) =>
           prev.map((a) => (a.id === tempId ? created : a))
         );
       }
+    } catch {
+      reportSaveFailure();
     }
   };
 
@@ -120,14 +142,68 @@ export default function Home() {
     if (!silent) setDataLoading(false);
   }, []);
 
+  // A write failed (or never reached the server). Snap state back to the
+  // database truth and briefly surface the failure rather than leaving a
+  // change on screen that wasn't actually saved.
+  const reportSaveFailure = useCallback(() => {
+    setSaveError(true);
+    fetchAll(true);
+    window.setTimeout(() => setSaveError(false), 4000);
+  }, [fetchAll]);
+
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
+
+  // Live sync: poll the tiny /api/version signature and only run the heavy
+  // fetchAll when the data actually changed. Skip a tick while the tab is
+  // hidden, a sidebar is open (draft rows would be wiped), or a write/cell-edit
+  // is in progress — see src/lib/liveSync.ts.
+  useEffect(() => {
+    if (dataLoading || loadError) return;
+    const id = window.setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      if (projectsOpen || teammatesOpen) return;
+      if (isBusy()) return;
+      try {
+        const res = await fetch("/api/version");
+        if (!res.ok) return;
+        const v = await res.json();
+        if (v.data !== dataVersionRef.current) {
+          dataVersionRef.current = v.data;
+          fetchAll(true);
+        }
+      } catch {
+        // Network blip — try again next tick.
+      }
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [dataLoading, loadError, projectsOpen, teammatesOpen, fetchAll]);
+
+  // Warn before leaving if a write is still in flight, so a refresh mid-save
+  // isn't silent. (keepalive should still deliver it, but this is a backstop.)
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasPendingWrites()) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, []);
 
   return (
     <div className="relative isolate flex h-screen flex-col overflow-hidden bg-white">
       {/* Watermark background */}
       <WatermarkBackground text="A L L O C A T E" className="-z-10" color="black" opacity={0.05} rotation={90} />
+
+      {/* Save-failure indicator */}
+      {saveError && (
+        <div className="fixed left-1/2 top-4 z-[60] -translate-x-1/2 rounded-lg border-2 border-zinc-900 bg-rose-100 px-4 py-1.5 text-sm font-bold text-rose-800 shadow-[3px_3px_0_#1a1a1a]">
+          Couldn&apos;t save your last change — refreshed to latest
+        </div>
+      )}
 
       {/* Top bar */}
       <header className="flex items-center justify-center gap-8 bg-white mt-14 mb-10">

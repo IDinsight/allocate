@@ -85,6 +85,11 @@ html, body {
   100% { background: transparent; }
 }
 
+@keyframes cellFlashGreen {
+  0% { background: #d7c2ff; }
+  100% { background: transparent; }
+}
+
 /* Comic thought bubble tooltip */
 .tooltip-bubble {
   background: white;

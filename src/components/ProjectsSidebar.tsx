@@ -3,6 +3,7 @@
 import { Dispatch, SetStateAction, useRef, useState } from "react";
 import ProjectsTable from "./ProjectsTable";
 import WatermarkBackground from "./WatermarkBackground";
+import { trackWrite } from "@/lib/liveSync";
 
 type Teammate = { id: string; name: string };
 
@@ -41,6 +42,7 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
   const pendingRef = useRef<Set<Promise<unknown>>>(new Set());
 
   const track = <T,>(p: Promise<T>): Promise<T> => {
+    trackWrite(p); // also register globally so live-sync polling waits for it
     pendingRef.current.add(p);
     p.finally(() => pendingRef.current.delete(p));
     return p;
@@ -64,10 +66,13 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: value }),
+        keepalive: true,
       }));
       if (res.ok) {
         const created = await res.json();
         setProjects((prev) => prev.map((p) => (p.id === id ? created : p)));
+      } else {
+        alert("Couldn't create project — please try again.");
       }
       return;
     }
@@ -83,10 +88,15 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [field]: value }),
+      keepalive: true,
     }));
     if (res.ok) {
       const updated = await res.json();
       setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    } else {
+      // Write failed — resync to the database truth so we don't keep showing
+      // an edit that wasn't saved.
+      onFlushed?.();
     }
   };
 
@@ -115,7 +125,8 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
     setProjects((prev) => prev.filter((p) => p.id !== id));
     // Only call API if it's a real row
     if (!id.startsWith("temp-")) {
-      await track(fetch(`/api/projects/${id}`, { method: "DELETE" }));
+      const res = await track(fetch(`/api/projects/${id}`, { method: "DELETE", keepalive: true }));
+      if (!res.ok) onFlushed?.(); // resync if the delete didn't persist
     }
   };
 

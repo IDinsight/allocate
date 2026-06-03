@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { POLL_INTERVAL_MS } from "@/lib/liveSync";
 
 const WIDTH = 450;
 const HEIGHT = 500;
@@ -15,28 +16,83 @@ export default function Notepad() {
   const [hovering, setHovering] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Last content we know matches the server, so we don't re-save (or get
+  // re-flagged dirty by) a value that just came from the server.
+  const lastSyncedRef = useRef("");
+  const savingRef = useRef(false);
+  // Notepad's updatedAt as last known — compared against /api/version so we
+  // only refetch the content when it actually changed on the server.
+  const versionRef = useRef("");
 
   useEffect(() => {
     fetch("/api/notepad")
       .then((r) => r.json())
-      .then((d) => { setNotes(d.content ?? ""); setLoaded(true); })
+      .then((d) => {
+        const content = d.content ?? "";
+        setNotes(content);
+        lastSyncedRef.current = content;
+        versionRef.current = d.updatedAt ?? "";
+        setLoaded(true);
+      })
       .catch(() => setLoaded(true));
   }, []);
 
   const save = useCallback((content: string) => {
     setSaving(true);
+    savingRef.current = true;
     fetch("/api/notepad", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content }),
-    }).finally(() => setSaving(false));
+      keepalive: true,
+    })
+      .then(async (r) => {
+        if (!r.ok) return;
+        lastSyncedRef.current = content;
+        // Adopt the server's new updatedAt so our own save doesn't look like a
+        // remote change on the next version poll.
+        const saved = await r.json().catch(() => null);
+        if (saved?.updatedAt) versionRef.current = saved.updatedAt;
+      })
+      .finally(() => { setSaving(false); savingRef.current = false; });
   }, []);
 
   useEffect(() => {
     if (!loaded) return;
+    if (notes === lastSyncedRef.current) return; // nothing changed locally
     const t = setTimeout(() => save(notes), 600);
     return () => clearTimeout(t);
   }, [notes, loaded, save]);
+
+  // Live sync: poll the tiny /api/version signature; only fetch the notepad
+  // content when it actually changed on the server. Only apply the server value
+  // when the user isn't actively editing (textarea unfocused, no save in
+  // flight, no unsaved local change) so we never wipe what they're typing.
+  useEffect(() => {
+    if (!loaded) return;
+    const id = window.setInterval(async () => {
+      if (document.visibilityState !== "visible") return;
+      if (document.activeElement === textareaRef.current) return;
+      if (savingRef.current) return;
+      if (notes !== lastSyncedRef.current) return; // unsaved local edit pending
+      try {
+        const vRes = await fetch("/api/version");
+        if (!vRes.ok) return;
+        const v = await vRes.json();
+        if (v.notepad === versionRef.current) return; // unchanged
+        const d = await fetch("/api/notepad").then((r) => r.json());
+        versionRef.current = d.updatedAt ?? "";
+        const content = d.content ?? "";
+        if (content !== lastSyncedRef.current) {
+          lastSyncedRef.current = content;
+          setNotes(content);
+        }
+      } catch {
+        // Network blip — try again next tick.
+      }
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [loaded, notes]);
 
   useEffect(() => {
     if (open && textareaRef.current) {

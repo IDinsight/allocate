@@ -315,10 +315,15 @@ export default function AllocationView({
     : TEAMMATE_INFO_WIDTH + PROJECT_NAME_WIDTH;
   const totalWidth = leftPanelWidth + weekStarts.length * CELL_WIDTH;
 
-  // Scroll to current month on mount
+  // Scroll to current month once, on first load only. Live-sync refetches
+  // replace weekStarts (new array ref → new scrollToCurrentMonth), so without
+  // this guard every incoming update would yank the view back to today.
+  const didInitialScrollRef = useRef(false);
   useEffect(() => {
+    if (didInitialScrollRef.current || weekStarts.length === 0) return;
+    didInitialScrollRef.current = true;
     scrollToCurrentMonth(false);
-  }, [scrollToCurrentMonth]);
+  }, [weekStarts, scrollToCurrentMonth]);
 
   return (
     <div className="flex flex-col h-full w-full max-w-6xl mx-auto px-12">

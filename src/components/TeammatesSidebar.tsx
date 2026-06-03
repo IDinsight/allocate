@@ -3,6 +3,7 @@
 import { Dispatch, SetStateAction, useRef, useState } from "react";
 import TeammatesTable from "./TeammatesTable";
 import WatermarkBackground from "./WatermarkBackground";
+import { trackWrite } from "@/lib/liveSync";
 
 export type Teammate = {
   id: string;
@@ -31,6 +32,7 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
   const pendingRef = useRef<Set<Promise<unknown>>>(new Set());
 
   const track = <T,>(p: Promise<T>): Promise<T> => {
+    trackWrite(p); // also register globally so live-sync polling waits for it
     pendingRef.current.add(p);
     p.finally(() => pendingRef.current.delete(p));
     return p;
@@ -53,10 +55,13 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: value }),
+        keepalive: true,
       }));
       if (res.ok) {
         const created = await res.json();
         setTeammates((prev) => prev.map((t) => (t.id === id ? created : t)));
+      } else {
+        alert("Couldn't create teammate — please try again.");
       }
       return;
     }
@@ -70,10 +75,14 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ [field]: value }),
+      keepalive: true,
     }));
     if (res.ok) {
       const updated = await res.json();
       setTeammates((prev) => prev.map((t) => (t.id === id ? updated : t)));
+    } else {
+      // Write failed — resync to the database truth.
+      onFlushed?.();
     }
   };
 
@@ -93,7 +102,7 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
 
   const handleDelete = async (id: string) => {
     if (!id.startsWith("temp-")) {
-      const res = await track(fetch(`/api/teammates/${id}`, { method: "DELETE" }));
+      const res = await track(fetch(`/api/teammates/${id}`, { method: "DELETE", keepalive: true }));
       if (!res.ok) {
         const data = await res.json();
         alert(data.error ?? "Failed to delete teammate");
