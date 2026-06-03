@@ -107,73 +107,57 @@ export default function DateHeader({
     ? TEAMMATE_INFO_WIDTH + PROJECT_NAME_WIDTH
     : PROJECT_INFO_WIDTH + TEAMMATE_NAME_WIDTH;
 
-  // ─── Filter definitions (view-dependent) ─────────────────
-  const filterDefs: FilterDef[] = activeView === "teammate"
-    ? [
-        {
-          key: "projectStatus",
-          label: "Status",
-          options: STATUS_ORDER.map((s) => ({ value: s, label: s })),
-        },
-        {
-          key: "teammateId",
-          label: "Team",
-          options: teammates
-            .map((t) => ({ value: t.id, label: t.name }))
-            .sort((a, b) => a.label.localeCompare(b.label)),
-          searchable: true,
-        },
-        {
-          key: "teammateRole",
-          label: "Role",
-          options: [
-            { value: "DS", label: "DS" },
-            { value: "DE", label: "DE" },
-            { value: "FSE", label: "FSE" },
-            { value: "PM", label: "PM" },
-          ],
-        },
-        {
-          key: "teammateLevel",
-          label: "Level",
-          options: [
-            { value: "INT", label: "INT" },
-            { value: "I", label: "I" },
-            { value: "II", label: "II" },
-            { value: "III", label: "III" },
-            { value: "IV", label: "IV" },
-            { value: "AD", label: "AD" },
-            { value: "D", label: "D" },
-          ],
-        },
-      ]
-    : [
-        {
-          key: "projectStatus",
-          label: "Status",
-          options: STATUS_ORDER.map((s) => ({ value: s, label: s })),
-        },
-        {
-          key: "projectLeadId",
-          label: "Lead",
-          options: Object.values(
-            Object.fromEntries(
-              projects
-                .filter((p) => p.lead)
-                .map((p) => [p.lead!.id, { value: p.lead!.id, label: p.lead!.name }])
-            )
-          ).sort((a, b) => a.label.localeCompare(b.label)),
-          searchable: true,
-        },
-        {
-          key: "teammateId",
-          label: "Team",
-          options: teammates
-            .map((t) => ({ value: t.id, label: t.name }))
-            .sort((a, b) => a.label.localeCompare(b.label)),
-          searchable: true,
-        },
-      ];
+  // ─── Filter definitions (same set on both views) ─────────
+  const filterDefs: FilterDef[] = [
+    {
+      key: "projectStatus",
+      label: "Status",
+      options: STATUS_ORDER.map((s) => ({ value: s, label: s })),
+    },
+    {
+      key: "projectLeadId",
+      label: "Lead",
+      options: Object.values(
+        Object.fromEntries(
+          projects
+            .filter((p) => p.lead)
+            .map((p) => [p.lead!.id, { value: p.lead!.id, label: p.lead!.name }])
+        )
+      ).sort((a, b) => a.label.localeCompare(b.label)),
+      searchable: true,
+    },
+    {
+      key: "teammateId",
+      label: "Team",
+      options: teammates
+        .map((t) => ({ value: t.id, label: t.name }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+      searchable: true,
+    },
+    {
+      key: "teammateRole",
+      label: "Role",
+      options: [
+        { value: "DS", label: "DS" },
+        { value: "DE", label: "DE" },
+        { value: "FSE", label: "FSE" },
+        { value: "PM", label: "PM" },
+      ],
+    },
+    {
+      key: "teammateLevel",
+      label: "Level",
+      options: [
+        { value: "INT", label: "INT" },
+        { value: "I", label: "I" },
+        { value: "II", label: "II" },
+        { value: "III", label: "III" },
+        { value: "IV", label: "IV" },
+        { value: "AD", label: "AD" },
+        { value: "D", label: "D" },
+      ],
+    },
+  ];
 
   function getChipLabel(def: FilterDef): string | null {
     const selected = filters[def.key];
@@ -255,12 +239,17 @@ export default function DateHeader({
             </div>
           )}
 
-          {/* Multi-select filters */}
+          {/* Multi-select filters — project-level, then a divider, then staff-level */}
           {filterDefs.map((def) => {
             const label = getChipLabel(def);
             const isOpen = openFilter === def.key;
+            // Divider between project-level (Status, Lead) and staff-level (Team, Role, Level)
+            const divider = def.key === "teammateId" ? (
+              <span className="self-center text-zinc-800 font-bold mx-0.5 leading-none" aria-hidden>•</span>
+            ) : null;
             return (
-              <div key={def.key} className="relative">
+              <div key={def.key} className="relative flex items-stretch gap-1">
+                {divider}
                 <Chip
                   active={!!label}
                   activeColor={def.activeColor ?? "bg-purple-100"}

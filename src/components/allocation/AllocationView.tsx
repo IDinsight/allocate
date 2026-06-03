@@ -88,27 +88,22 @@ function writeFiltersToUrl(filters: AllocationFilters) {
 
 // View-option toggles. Each key is omitted when its value matches the
 // default; presence with "1"/"0" overrides the default. Defaults differ per
-// option (notably `tt` is on by default), so we keep both directions.
+// option (notably `showTotals` is on by default), so we keep both directions.
+// Totals toggles are shared across both views — they are not view-specific.
 type ViewOptions = {
   showProjectDetails: boolean;
-  showProjectTotals: boolean;
-  projectTotalsOnly: boolean;
   showTotals: boolean;
   totalsOnly: boolean;
 };
 
 const VIEW_OPTION_KEYS = [
   "showDetails",
-  "showProjectTotals",
-  "projectTotalsOnly",
-  "showTeamTotals",
-  "teamTotalsOnly",
+  "showTotals",
+  "totalsOnly",
 ] as const;
 
 const VIEW_OPTION_DEFAULTS: ViewOptions = {
   showProjectDetails: false,
-  showProjectTotals: false,
-  projectTotalsOnly: false,
   showTotals: true,
   totalsOnly: false,
 };
@@ -123,10 +118,8 @@ function parseViewOptionsFromSearch(search: string): ViewOptions {
   };
   return {
     showProjectDetails: flag("showDetails", VIEW_OPTION_DEFAULTS.showProjectDetails),
-    showProjectTotals: flag("showProjectTotals", VIEW_OPTION_DEFAULTS.showProjectTotals),
-    projectTotalsOnly: flag("projectTotalsOnly", VIEW_OPTION_DEFAULTS.projectTotalsOnly),
-    showTotals: flag("showTeamTotals", VIEW_OPTION_DEFAULTS.showTotals),
-    totalsOnly: flag("teamTotalsOnly", VIEW_OPTION_DEFAULTS.totalsOnly),
+    showTotals: flag("showTotals", VIEW_OPTION_DEFAULTS.showTotals),
+    totalsOnly: flag("totalsOnly", VIEW_OPTION_DEFAULTS.totalsOnly),
   };
 }
 
@@ -137,17 +130,11 @@ function writeViewOptionsToUrl(opts: ViewOptions) {
   if (opts.showProjectDetails !== VIEW_OPTION_DEFAULTS.showProjectDetails) {
     params.set("showDetails", opts.showProjectDetails ? "1" : "0");
   }
-  if (opts.showProjectTotals !== VIEW_OPTION_DEFAULTS.showProjectTotals) {
-    params.set("showProjectTotals", opts.showProjectTotals ? "1" : "0");
-  }
-  if (opts.projectTotalsOnly !== VIEW_OPTION_DEFAULTS.projectTotalsOnly) {
-    params.set("projectTotalsOnly", opts.projectTotalsOnly ? "1" : "0");
-  }
   if (opts.showTotals !== VIEW_OPTION_DEFAULTS.showTotals) {
-    params.set("showTeamTotals", opts.showTotals ? "1" : "0");
+    params.set("showTotals", opts.showTotals ? "1" : "0");
   }
   if (opts.totalsOnly !== VIEW_OPTION_DEFAULTS.totalsOnly) {
-    params.set("teamTotalsOnly", opts.totalsOnly ? "1" : "0");
+    params.set("totalsOnly", opts.totalsOnly ? "1" : "0");
   }
   const qs = params.toString();
   const next = window.location.pathname + (qs ? "?" + qs : "") + window.location.hash;
@@ -206,19 +193,15 @@ export default function AllocationView({
   );
   const [showProjectDetails, setShowProjectDetails] = useState(viewOptionsInit.showProjectDetails);
   const [showTotals, setShowTotals] = useState(viewOptionsInit.showTotals);
-  const [showProjectTotals, setShowProjectTotals] = useState(viewOptionsInit.showProjectTotals);
   const [totalsOnly, setTotalsOnly] = useState(viewOptionsInit.totalsOnly);
-  const [projectTotalsOnly, setProjectTotalsOnly] = useState(viewOptionsInit.projectTotalsOnly);
 
   useEffect(() => {
     writeViewOptionsToUrl({
       showProjectDetails,
-      showProjectTotals,
-      projectTotalsOnly,
       showTotals,
       totalsOnly,
     });
-  }, [showProjectDetails, showProjectTotals, projectTotalsOnly, showTotals, totalsOnly]);
+  }, [showProjectDetails, showTotals, totalsOnly]);
   const [addedPairs, setAddedPairs] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -352,14 +335,14 @@ export default function AllocationView({
               showProjectDetails={showProjectDetails}
               onToggleProjectDetails={() => setShowProjectDetails((v) => !v)}
               activeView={activeView}
-              showTotals={showProjectTotals}
-              onToggleShowTotals={() => setShowProjectTotals((v) => {
-                if (v) setProjectTotalsOnly(false);
+              showTotals={showTotals}
+              onToggleShowTotals={() => setShowTotals((v) => {
+                if (v) setTotalsOnly(false); // turning off showTotals also turns off totalsOnly
                 return !v;
               })}
-              totalsOnly={projectTotalsOnly}
-              onToggleTotalsOnly={() => setProjectTotalsOnly((v) => {
-                if (!v) setShowProjectTotals(true);
+              totalsOnly={totalsOnly}
+              onToggleTotalsOnly={() => setTotalsOnly((v) => {
+                if (!v) setShowTotals(true); // turning on totalsOnly forces showTotals on
                 return !v;
               })}
             />
@@ -375,9 +358,11 @@ export default function AllocationView({
                 monthBoundaries={monthBoundaries}
                 teammateStatusFilter={filters.teammateStatus}
                 teammateIdFilter={filters.teammateId}
+                teammateRoleFilter={filters.teammateRole}
+                teammateLevelFilter={filters.teammateLevel}
                 showProjectDetails={showProjectDetails}
-                showTotals={showProjectTotals}
-                totalsOnly={projectTotalsOnly}
+                showTotals={showTotals}
+                totalsOnly={totalsOnly}
                 projectTotals={projectTotals}
                 onCellEdit={onCellEdit}
                 addedPairs={addedPairs}

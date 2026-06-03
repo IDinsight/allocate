@@ -34,6 +34,8 @@ interface Props {
   monthBoundaries: Set<string>;
   teammateStatusFilter?: Set<string>;
   teammateIdFilter?: Set<string>;
+  teammateRoleFilter?: Set<string>;
+  teammateLevelFilter?: Set<string>;
   showProjectDetails?: boolean;
   showTotals?: boolean;
   totalsOnly?: boolean;
@@ -60,6 +62,8 @@ export default function ProjectSection({
   monthBoundaries,
   teammateStatusFilter,
   teammateIdFilter,
+  teammateRoleFilter,
+  teammateLevelFilter,
   showProjectDetails,
   showTotals,
   totalsOnly,
@@ -105,11 +109,20 @@ export default function ProjectSection({
   if (teammateIdFilter && teammateIdFilter.size > 0) {
     projectTeammates = projectTeammates.filter((t) => teammateIdFilter.has(t.id));
   }
-  // When a team filter is active, hide projects that have no matching teammate
-  // (mirrors TeammateSection hiding teammates with no matching projects). Empty
-  // projects still show when no team filter is set, so they can be added to.
+  if (teammateRoleFilter && teammateRoleFilter.size > 0) {
+    projectTeammates = projectTeammates.filter((t) => teammateRoleFilter.has(t.role ?? ""));
+  }
+  if (teammateLevelFilter && teammateLevelFilter.size > 0) {
+    projectTeammates = projectTeammates.filter((t) => teammateLevelFilter.has(t.level ?? ""));
+  }
+  // When an explicit team filter (Team/Role/Level) is active, hide projects with
+  // no matching teammate (mirrors TeammateSection hiding teammates with no
+  // matching projects). Status is excluded on purpose: "Hide alumni" is a
+  // row-level toggle and must not collapse projects that have nobody assigned.
   const hasTeammateFilter =
-    (teammateIdFilter?.size ?? 0) > 0 || (teammateStatusFilter?.size ?? 0) > 0;
+    (teammateIdFilter?.size ?? 0) > 0 ||
+    (teammateRoleFilter?.size ?? 0) > 0 ||
+    (teammateLevelFilter?.size ?? 0) > 0;
   if (hasTeammateFilter && projectTeammates.length === 0 && !adding) return null;
   const statusColors = STATUS_COLORS[project.status as keyof typeof STATUS_COLORS];
 
