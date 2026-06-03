@@ -133,6 +133,8 @@ export default function DateHeader({
         .map((t) => ({ value: t.id, label: t.name }))
         .sort((a, b) => a.label.localeCompare(b.label)),
       searchable: true,
+      activeColor: "bg-green-100",
+      activeTextColor: "text-green-800",
     },
     {
       key: "teammateRole",
@@ -143,6 +145,8 @@ export default function DateHeader({
         { value: "FSE", label: "FSE" },
         { value: "PM", label: "PM" },
       ],
+      activeColor: "bg-green-100",
+      activeTextColor: "text-green-800",
     },
     {
       key: "teammateLevel",
@@ -156,6 +160,8 @@ export default function DateHeader({
         { value: "AD", label: "AD" },
         { value: "D", label: "D" },
       ],
+      activeColor: "bg-green-100",
+      activeTextColor: "text-green-800",
     },
   ];
 
@@ -200,7 +206,7 @@ export default function DateHeader({
         <div className="flex flex-wrap gap-1">
           {/* Toggle: show project details (project view only) */}
           {activeView !== "teammate" && (
-            <Chip active={showProjectDetails} activeColor="bg-blue-100" activeTextColor="text-blue-800" onClick={onToggleProjectDetails}>
+            <Chip active={showProjectDetails} activeColor="bg-purple-100" activeTextColor="text-purple-800" onClick={onToggleProjectDetails}>
               Show details
               {showProjectDetails && <ClearButton onClick={onToggleProjectDetails} />}
             </Chip>
@@ -208,11 +214,11 @@ export default function DateHeader({
 
           {/* Search: project name (both views) */}
           {searchActive ? (
-            <div className={`${CHIP_BASE} chip-filter-active bg-orange-100 text-orange-900`}>
+            <div className={`${CHIP_BASE} chip-filter-active bg-purple-100 text-purple-800`}>
               <Search size={12} strokeWidth={4} />
               {searchFocused ? (
                 <input
-                  className="bg-transparent outline-none w-20 text-xs placeholder:text-orange-900/40"
+                  className="bg-transparent outline-none w-20 text-xs placeholder:text-purple-800/40"
                   placeholder="Projects"
                   value={filters.projectName}
                   onChange={(e) => onFilterChange("projectName", e.target.value)}
