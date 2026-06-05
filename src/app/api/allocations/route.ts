@@ -5,6 +5,8 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const teammateIdParam = url.searchParams.get("teammateId");
+  const projectIdParam = url.searchParams.get("projectId");
 
   const where: Record<string, unknown> = {};
   if (from || to) {
@@ -12,6 +14,22 @@ export async function GET(req: NextRequest) {
     if (from) weekStart.gte = new Date(from);
     if (to) weekStart.lte = new Date(to);
     where.weekStart = weekStart;
+  }
+  if (teammateIdParam) {
+    const ids = teammateIdParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ids.length === 1) where.teammateId = ids[0];
+    else if (ids.length > 1) where.teammateId = { in: ids };
+  }
+  if (projectIdParam) {
+    const ids = projectIdParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (ids.length === 1) where.projectId = ids[0];
+    else if (ids.length > 1) where.projectId = { in: ids };
   }
 
   const [allocations, weekStartsRaw] = await Promise.all([
@@ -34,6 +52,19 @@ export async function GET(req: NextRequest) {
       orderBy: { weekStart: "asc" },
     }),
   ]);
+
+  if (teammateIdParam && allocations.length === 0) {
+    return NextResponse.json(
+      { error: "No teammate found with the given teammateId" },
+      { status: 404 }
+    );
+  }
+  if (projectIdParam && allocations.length === 0) {
+    return NextResponse.json(
+      { error: "No project found with the given projectId" },
+      { status: 404 }
+    );
+  }
 
   const weekStarts = weekStartsRaw.map(
     (w) => w.weekStart.toISOString().split("T")[0]

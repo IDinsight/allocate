@@ -228,7 +228,8 @@ const spec = {
     "/api/allocations": {
       get: {
         tags: ["allocations"],
-        summary: "List allocations, optionally filtered by week-start range",
+        summary:
+          "List allocations, optionally filtered by week-start range, teammate, or project",
         parameters: [
           {
             name: "from",
@@ -243,6 +244,22 @@ const spec = {
             required: false,
             description: "Inclusive upper bound on weekStart (YYYY-MM-DD).",
             schema: { type: "string", format: "date" },
+          },
+          {
+            name: "teammateId",
+            in: "query",
+            required: false,
+            description:
+              "Restrict to one or more teammates. Comma-separate multiple ids (e.g. `id1,id2`). Returns 404 if no allocations match.",
+            schema: { type: "string" },
+          },
+          {
+            name: "projectId",
+            in: "query",
+            required: false,
+            description:
+              "Restrict to one or more projects. Comma-separate multiple ids (e.g. `id1,id2`). Returns 404 if no allocations match.",
+            schema: { type: "string" },
           },
         ],
         responses: {
@@ -264,6 +281,15 @@ const spec = {
                     },
                   },
                 },
+              },
+            },
+          },
+          "404": {
+            description:
+              "No allocations matched the given teammateId or projectId filter",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
               },
             },
           },
