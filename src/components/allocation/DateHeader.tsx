@@ -75,8 +75,6 @@ interface Props {
   onFilterChange: <K extends keyof AllocationFilters>(key: K, value: AllocationFilters[K]) => void;
   projects: Project[];
   teammates: Teammate[];
-  showProjectDetails: boolean;
-  onToggleProjectDetails: () => void;
   activeView?: "project" | "teammate";
   showTotals?: boolean;
   onToggleShowTotals?: () => void;
@@ -92,8 +90,6 @@ export default function DateHeader({
   onFilterChange,
   projects,
   teammates,
-  showProjectDetails,
-  onToggleProjectDetails,
   activeView = "project",
   showTotals,
   onToggleShowTotals,
@@ -204,14 +200,6 @@ export default function DateHeader({
       >
         <div className="text-sm font-bold mb-1 overflow-hidden whitespace-nowrap">controls controls controls controls controls controls controls</div>
         <div className="flex flex-wrap gap-1">
-          {/* Toggle: show project details (project view only) */}
-          {activeView !== "teammate" && (
-            <Chip active={showProjectDetails} activeColor="bg-purple-100" activeTextColor="text-purple-800" onClick={onToggleProjectDetails}>
-              Show details
-              {showProjectDetails && <ClearButton onClick={onToggleProjectDetails} />}
-            </Chip>
-          )}
-
           {/* Search: project name (both views) */}
           {searchActive ? (
             <div className={`${CHIP_BASE} chip-filter-active bg-purple-100 text-purple-800`}>

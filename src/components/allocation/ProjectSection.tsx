@@ -11,8 +11,10 @@ import { Plus } from "lucide-react";
 
 const CELL_WIDTH = 56;
 
-export const PROJECT_INFO_WIDTH = 200;
-export const TEAMMATE_NAME_WIDTH = 90;
+// Mirror TeammateSection: the project column is 240 and the teammate column
+// 140 in both views, so the sticky left panel is the same width either way.
+export const PROJECT_INFO_WIDTH = 240;
+export const TEAMMATE_NAME_WIDTH = 140;
 const ROW_HEIGHT = 28;
 
 export type Allocation = {
@@ -36,7 +38,6 @@ interface Props {
   teammateIdFilter?: Set<string>;
   teammateRoleFilter?: Set<string>;
   teammateLevelFilter?: Set<string>;
-  showProjectDetails?: boolean;
   showTotals?: boolean;
   totalsOnly?: boolean;
   projectTotals?: Map<string, number>;
@@ -64,7 +65,6 @@ export default function ProjectSection({
   teammateIdFilter,
   teammateRoleFilter,
   teammateLevelFilter,
-  showProjectDetails,
   showTotals,
   totalsOnly,
   projectTotals,
@@ -154,22 +154,18 @@ export default function ProjectSection({
           <span className="font-bold text-md text-zinc-900 leading-tight">
             {project.name}
           </span>
-          {showProjectDetails && (
-            <>
-              <span className="text-sm text-zinc-500 leading-tight">
-                {[project.region, project.billingRate].filter(Boolean).join(", ")}
-              </span>
-              {project.lead && (
-                <span className="text-sm font-bold text-violet-700 leading-tight">
-                  ★ {project.lead.name}
-                </span>
-              )}
-              {statusColors && (
-                <span className={`self-start text-sm font-bold px-2 py-0.5 rounded-md border mt-1 ${statusColors.chip}`}>
-                  {project.status}
-                </span>
-              )}
-            </>
+          <span className="text-sm text-zinc-500 leading-tight">
+            {[project.region, project.billingRate].filter(Boolean).join(", ")}
+          </span>
+          {project.lead && (
+            <span className="text-sm font-bold text-violet-700 leading-tight">
+              ★ {project.lead.name}
+            </span>
+          )}
+          {statusColors && (
+            <span className={`self-start text-sm font-bold px-2 py-0.5 rounded-md border mt-1 ${statusColors.chip}`}>
+              {project.status}
+            </span>
           )}
         </div>
 

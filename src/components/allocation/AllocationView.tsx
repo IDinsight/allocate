@@ -91,11 +91,12 @@ function writeFiltersToUrl(filters: AllocationFilters) {
 // option (notably `showTotals` is on by default), so we keep both directions.
 // Totals toggles are shared across both views — they are not view-specific.
 type ViewOptions = {
-  showProjectDetails: boolean;
   showTotals: boolean;
   totalsOnly: boolean;
 };
 
+// `showDetails` is retired — project details are always shown now. It stays in
+// this list so bookmarked URLs carrying it are cleaned up rather than broken.
 const VIEW_OPTION_KEYS = [
   "showDetails",
   "showTotals",
@@ -103,7 +104,6 @@ const VIEW_OPTION_KEYS = [
 ] as const;
 
 const VIEW_OPTION_DEFAULTS: ViewOptions = {
-  showProjectDetails: false,
   showTotals: true,
   totalsOnly: false,
 };
@@ -117,7 +117,6 @@ function parseViewOptionsFromSearch(search: string): ViewOptions {
     return def;
   };
   return {
-    showProjectDetails: flag("showDetails", VIEW_OPTION_DEFAULTS.showProjectDetails),
     showTotals: flag("showTotals", VIEW_OPTION_DEFAULTS.showTotals),
     totalsOnly: flag("totalsOnly", VIEW_OPTION_DEFAULTS.totalsOnly),
   };
@@ -127,9 +126,6 @@ function writeViewOptionsToUrl(opts: ViewOptions) {
   if (typeof window === "undefined") return;
   const params = new URLSearchParams(window.location.search);
   for (const k of VIEW_OPTION_KEYS) params.delete(k);
-  if (opts.showProjectDetails !== VIEW_OPTION_DEFAULTS.showProjectDetails) {
-    params.set("showDetails", opts.showProjectDetails ? "1" : "0");
-  }
   if (opts.showTotals !== VIEW_OPTION_DEFAULTS.showTotals) {
     params.set("showTotals", opts.showTotals ? "1" : "0");
   }
@@ -191,17 +187,12 @@ export default function AllocationView({
       ? VIEW_OPTION_DEFAULTS
       : parseViewOptionsFromSearch(window.location.search)
   );
-  const [showProjectDetails, setShowProjectDetails] = useState(viewOptionsInit.showProjectDetails);
   const [showTotals, setShowTotals] = useState(viewOptionsInit.showTotals);
   const [totalsOnly, setTotalsOnly] = useState(viewOptionsInit.totalsOnly);
 
   useEffect(() => {
-    writeViewOptionsToUrl({
-      showProjectDetails,
-      showTotals,
-      totalsOnly,
-    });
-  }, [showProjectDetails, showTotals, totalsOnly]);
+    writeViewOptionsToUrl({ showTotals, totalsOnly });
+  }, [showTotals, totalsOnly]);
   const [addedPairs, setAddedPairs] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -337,8 +328,6 @@ export default function AllocationView({
               onFilterChange={updateFilter}
               projects={projects}
               teammates={teammates}
-              showProjectDetails={showProjectDetails}
-              onToggleProjectDetails={() => setShowProjectDetails((v) => !v)}
               activeView={activeView}
               showTotals={showTotals}
               onToggleShowTotals={() => setShowTotals((v) => {
@@ -365,7 +354,6 @@ export default function AllocationView({
                 teammateIdFilter={filters.teammateId}
                 teammateRoleFilter={filters.teammateRole}
                 teammateLevelFilter={filters.teammateLevel}
-                showProjectDetails={showProjectDetails}
                 showTotals={showTotals}
                 totalsOnly={totalsOnly}
                 projectTotals={projectTotals}
@@ -394,8 +382,6 @@ export default function AllocationView({
               onFilterChange={updateFilter}
               projects={projects}
               teammates={teammates}
-              showProjectDetails={false}
-              onToggleProjectDetails={() => {}}
               activeView={activeView}
               showTotals={showTotals}
               onToggleShowTotals={() => setShowTotals((v) => {
