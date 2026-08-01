@@ -80,6 +80,17 @@ html, body {
   animation: wavyBounce 0.8s ease-in-out infinite;
 }
 
+/* Letter wave sized for body text rather than a 2xl loader */
+@keyframes wavyText {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.wavy-text span {
+  display: inline-block;
+  animation: wavyText 1.4s ease-in-out infinite;
+}
+
 @keyframes cellFlashRed {
   0% { background: #fca5a5; }
   100% { background: transparent; }

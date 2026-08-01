@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 
 // Next 16 renamed the `middleware` convention to `proxy`. With a `src/`
 // directory the file must live at `src/proxy.ts` (same level as `app`).
@@ -9,12 +10,14 @@ const READONLY_API_KEYS = (process.env.READONLY_API_KEYS ?? "")
   .map((k) => k.trim())
   .filter(Boolean);
 
-export function proxy(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isLoginPage = pathname === "/login";
-  const isLoginApi = pathname === "/api/auth/login";
 
-  if (isLoginPage || isLoginApi) return NextResponse.next();
+  // The login page and the Google OAuth endpoints must stay reachable to
+  // signed-out visitors, otherwise sign-in can never complete.
+  if (pathname === "/login" || pathname.startsWith("/api/auth/google")) {
+    return NextResponse.next();
+  }
 
   // API-key auth: Authorization: Bearer <key> (falls back to x-api-key).
   const key =
@@ -27,10 +30,14 @@ export function proxy(req: NextRequest) {
     return NextResponse.json({ error: "read-only API key" }, { status: 403 });
   }
 
-  if (req.cookies.get("auth")?.value === "1") return NextResponse.next();
+  const session = await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  if (session) return NextResponse.next();
 
-  const loginUrl = new URL("/login", req.url);
-  return NextResponse.redirect(loginUrl);
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return NextResponse.redirect(new URL("/login", req.url));
 }
 
 export const config = {

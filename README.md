@@ -1,30 +1,115 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Allocate
 
-## Getting Started
+Staff allocation tracker for IDinsight. Shows who is working on what, week by
+week, as an editable grid you can view by project or by teammate — plus project
+and teammate tables, a shared notepad, and a read-only JSON API for agents and
+scripts.
 
-First, run the development server:
+Built with Next.js 16 (App Router), React 19, Tailwind 4, and Prisma 7 against
+Postgres.
+
+## Setup
+
+Requires Node 20+, [pnpm](https://pnpm.io), and a Postgres database — either the
+shared one or [a local one](#optional-a-local-postgres).
 
 ```bash
+pnpm install
+cp template.env .env    # then fill it in — see below
+pnpm exec prisma migrate deploy
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | What it's for |
+| --- | --- |
+| `DATABASE_URL` | Pooled connection, used by the app at runtime |
+| `DIRECT_URL` | Direct connection, used for migrations |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client, for sign-in |
+| `AUTH_SECRET` | Signs the session cookie. Generate with `openssl rand -hex 32` |
+| `READONLY_API_KEYS` | Optional, comma-separated. Grants GET-only API access |
 
-## Learn More
+### Optional: a local Postgres
 
-To learn more about Next.js, take a look at the following resources:
+You can point `.env` at the shared database, but running your own keeps
+experiments off it. With Docker:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker run --name allocate-db -e POSTGRES_PASSWORD=allocate \
+  -e POSTGRES_DB=allocate -p 5433:5432 -d postgres:17
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Port 5433 avoids clashing with a Postgres you may already have on 5432. Set both
+URLs to it — there is no pooler locally, so they are the same:
 
-## Deploy on Vercel
+```bash
+DATABASE_URL=postgresql://postgres:allocate@localhost:5433/allocate
+DIRECT_URL=postgresql://postgres:allocate@localhost:5433/allocate
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Then `pnpm exec prisma migrate deploy` creates the schema. No extensions are
+needed. Since the database starts empty and sign-in requires a matching teammate
+row, insert yourself before your first login:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+docker exec allocate-db psql -U postgres -d allocate -c \
+  "INSERT INTO teammates (id, name, email, status, \"createdAt\", \"updatedAt\")
+   VALUES ('me', 'Your Name', 'you@idinsight.org', 'Active', now(), now());"
+```
+
+`docker start allocate-db` brings it back after a reboot; `docker rm -f
+allocate-db` throws it away. To work with real data instead, restore the dump in
+`data/` or run `data/seed.py`.
+
+### Google sign-in
+
+Sign-in is Google OAuth only, and **only emails already present in the
+`teammates` table can log in** — everyone else is bounced back to the login page.
+To add someone, add them as a teammate with their work email first.
+
+In the [Google Cloud console](https://console.cloud.google.com/apis/credentials),
+create an OAuth 2.0 Web application client and register an authorised redirect
+URI for every origin you run on, each ending in `/api/auth/google/callback`:
+
+```text
+http://localhost:3000/api/auth/google/callback
+https://your-deployment.example.com/api/auth/google/callback
+```
+
+Google requires an exact full-path match, so a bare origin will not work.
+
+## API
+
+Every endpoint lives under `/api` and requires auth: either a browser session
+cookie, or a read-only key from `READONLY_API_KEYS` passed as
+`Authorization: Bearer <key>` (or `x-api-key`). Read-only keys may only make GET
+requests; anything else returns 403.
+
+The full contract is served as OpenAPI 3.1 from
+[`/api/openapi`](http://localhost:3000/api/openapi) — hand an agent the base URL
+and a key and point it there. It is hand-written in
+[`src/app/api/openapi/route.ts`](src/app/api/openapi/route.ts) and must be kept
+in sync whenever a route changes.
+
+## Database
+
+The schema lives in [`prisma/schema.prisma`](prisma/schema.prisma). After
+editing it:
+
+```bash
+pnpm exec prisma migrate dev --name describe_your_change
+```
+
+`prisma generate` runs automatically on install and build, emitting the client
+to `src/generated/prisma`. `data/seed.py` imports the original allocations
+spreadsheet into an empty database.
+
+## Deployment
+
+`pnpm build` compiles the app; `pnpm start` runs `prisma migrate deploy` before
+booting, so migrations apply on release. Set every environment variable above in
+the hosting platform, and add that deployment's callback URL to the Google OAuth
+client.

@@ -14,8 +14,9 @@ const spec = {
     description:
       "Staff allocation tracker. All endpoints require auth. A read-only API " +
       "key (`Authorization: Bearer <key>`) grants access to GET requests only; " +
-      "non-GET methods with such a key return 403. Browser sessions (the `auth` " +
-      "cookie) may use every method.",
+      "non-GET methods with such a key return 403. Browser sessions (the signed " +
+      "`session` cookie, obtained by signing in with Google as a known " +
+      "teammate) may use every method; unauthenticated /api/* requests get 401.",
   },
   servers: [{ url: "/", description: "Same origin as this document" }],
   security: [{ bearerAuth: [] }],
@@ -467,32 +468,42 @@ const spec = {
         responses: { "200": { description: "OpenAPI 3.1 spec" } },
       },
     },
-    "/api/auth/login": {
-      post: {
+    "/api/auth/google": {
+      get: {
         tags: ["auth"],
-        summary: "Exchange the site password for an auth cookie",
+        summary: "Start Google sign-in",
+        description:
+          "Sets a short-lived `oauth_state` cookie and redirects to Google's " +
+          "consent screen. Browser-only; not useful to API clients.",
         security: [],
-        requestBody: {
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                required: ["password"],
-                properties: { password: { type: "string" } },
-              },
-            },
-          },
-        },
         responses: {
-          "200": { description: "Sets the `auth` cookie" },
-          "401": { description: "Wrong password" },
+          "307": { description: "Redirect to Google" },
+        },
+      },
+    },
+    "/api/auth/google/callback": {
+      get: {
+        tags: ["auth"],
+        summary: "Google OAuth redirect target",
+        description:
+          "Exchanges the authorization code for an ID token. If the verified " +
+          "Google email matches a teammate record, sets the signed `session` " +
+          "cookie and redirects to `/`. Otherwise redirects to " +
+          "`/login?error=denied` (unknown email) or `/login?error=oauth`.",
+        security: [],
+        parameters: [
+          { name: "code", in: "query", schema: { type: "string" } },
+          { name: "state", in: "query", schema: { type: "string" } },
+        ],
+        responses: {
+          "307": { description: "Redirect to `/` on success, `/login` otherwise" },
         },
       },
     },
     "/api/auth/logout": {
       post: {
         tags: ["auth"],
-        summary: "Clear the auth cookie",
+        summary: "Clear the session cookie",
         responses: { "200": { description: "Logged out" } },
       },
     },
