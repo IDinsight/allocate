@@ -195,10 +195,16 @@ export default function DateHeader({
     <div className="sticky top-0 z-20 flex items-stretch bg-white">
       {/* Corner — filter controls */}
       <div
-        className="sticky left-0 z-30 bg-white shrink-0 border-b-2 border-r-2 px-2 pb-2"
+        className="controls-panel sticky left-0 z-30 bg-white shrink-0 border-b-2 border-r-2 px-2 pb-2"
         style={{ width: leftPanelWidth, minWidth: leftPanelWidth }}
       >
-        <div className="text-sm font-bold mb-1 overflow-hidden whitespace-nowrap">controls controls controls controls controls controls controls</div>
+        <div className="wavy-hover text-sm font-bold mb-1 overflow-hidden whitespace-nowrap">
+          {[..."controls controls controls controls controls controls controls"].map((ch, i) => (
+            <span key={i} style={{ animationDelay: `${i * 0.03}s` }}>
+              {ch === " " ? " " : ch}
+            </span>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-1">
           {/* Search: project name (both views) */}
           {searchActive ? (
