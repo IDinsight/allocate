@@ -516,8 +516,9 @@ const spec = {
         tags: ["auth"],
         summary: "The signed-in account and its access tier",
         description:
-          "`access` is `edit` for teammates and `EXTRA_ALLOWED_EMAILS` " +
-          "addresses, `read` for anyone else on an allowed email domain. " +
+          "`access` is `edit` for Active teammates and `EXTRA_ALLOWED_EMAILS` " +
+          "addresses, `read` for Alumni teammates and anyone else on an " +
+          "allowed email domain. " +
           "Read-only accounts get 403 on anything but GET and HEAD; accounts " +
           "on neither list are rejected outright, so `none` never reaches a " +
           "caller.",

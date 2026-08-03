@@ -6,8 +6,8 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Access tiers ─────────────────────────────────────────
 //
-//   edit — on the teammates list, or listed in EXTRA_ALLOWED_EMAILS
-//   read — any other address on an allowed domain: may GET, never write
+//   edit — an Active teammate, or listed in EXTRA_ALLOWED_EMAILS
+//   read — an Alumni teammate, or any address on an allowed domain
 //   none — everyone else: cannot sign in at all
 //
 // Tiers are resolved from the database on demand rather than baked into the
@@ -33,9 +33,9 @@ export async function resolveAccess(email: string): Promise<Access> {
 
   const teammate = await prisma.teammate.findFirst({
     where: { email: { equals: addr, mode: "insensitive" } },
-    select: { id: true },
+    select: { status: true },
   });
-  if (teammate) return "edit";
+  if (teammate) return teammate.status === "Active" ? "edit" : "read";
 
   const domain = addr.split("@")[1] ?? "";
   if (ALLOWED_EMAIL_DOMAINS.includes(domain)) return "read";

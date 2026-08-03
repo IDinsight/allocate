@@ -68,7 +68,8 @@ There are three tiers, resolved from the email Google returns:
 
 | Who | What they get |
 | --- | --- |
-| On the `teammates` list, or in `EXTRA_ALLOWED_EMAILS` | Full edit access |
+| An **Active** teammate, or in `EXTRA_ALLOWED_EMAILS` | Full edit access |
+| An **Alumni** teammate | Read-only |
 | Any other address on an allowed domain (`idinsight.org` by default) | Read-only |
 | Everyone else | Cannot sign in |
 
