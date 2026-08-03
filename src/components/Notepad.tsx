@@ -146,17 +146,20 @@ export default function Notepad() {
 
         {/* Lined writing area */}
         <div className="flex-1 relative bg-white">
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              backgroundImage: "repeating-linear-gradient(to bottom, transparent, transparent 23px, #dbeafe 23px, #dbeafe 24px)",
-              backgroundPositionY: 8,
-            }}
-          />
+          {/* Margin rule stays put; the horizontal lines belong to the
+              textarea so `background-attachment: local` scrolls them with the
+              text instead of leaving it to slide underneath. The 24px period
+              matches leading-6, and the 8px offset matches py-2. */}
           <div className="absolute top-0 bottom-0 left-9 w-px bg-rose-300/50 pointer-events-none" />
           <textarea
             ref={textareaRef}
-            className="w-full h-full resize-none bg-transparent px-4 pl-11 py-2 text-sm text-zinc-800 outline-none font-mono leading-6"
+            className="w-full h-full resize-none px-4 pl-11 py-2 text-sm text-zinc-800 outline-none font-mono leading-6"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(to bottom, transparent, transparent 23px, #dbeafe 23px, #dbeafe 24px)",
+              backgroundAttachment: "local",
+              backgroundPosition: "0 5px",
+            }}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={canEdit ? "Jot something down..." : ""}
