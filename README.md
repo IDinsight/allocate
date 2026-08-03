@@ -5,8 +5,8 @@ week, as an editable grid you can view by project or by teammate — plus projec
 and teammate tables, a shared notepad, and a read-only JSON API for agents and
 scripts.
 
-Built with Next.js 16 (App Router), React 19, Tailwind 4, and Prisma 7 against
-Postgres.
+Built with Next.js 16 (App Router), React 19, Tailwind 4, Prisma 7 against
+Postgres, and Better Auth for Google sign-in.
 
 ## Setup
 
@@ -29,8 +29,10 @@ Open [http://localhost:3000](http://localhost:3000).
 | `DATABASE_URL` | Pooled connection, used by the app at runtime |
 | `DIRECT_URL` | Direct connection, used for migrations |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client, for sign-in |
-| `AUTH_SECRET` | Signs the session cookie. Generate with `openssl rand -hex 32` |
-| `EXTRA_ALLOWED_EMAILS` | Optional, comma-separated. Emails that may sign in without a teammate record |
+| `BETTER_AUTH_SECRET` | Signs sessions. Generate with `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | This deployment's public origin, used for OAuth redirects |
+| `ALLOWED_EMAIL_DOMAINS` | Optional, comma-separated. Domains that may sign in. Defaults to `idinsight.org` |
+| `EXTRA_ALLOWED_EMAILS` | Optional, comma-separated. Emails granted edit access without a teammate record |
 | `READONLY_API_KEYS` | Optional, comma-separated. Grants GET-only API access |
 
 ### Optional: a local Postgres
@@ -53,31 +55,59 @@ DIRECT_URL=postgresql://postgres:allocate@localhost:5433/allocate
 
 Then `pnpm exec prisma migrate deploy` creates the schema. No extensions are
 needed. The database starts empty, so set `EXTRA_ALLOWED_EMAILS` to your own
-address or you will not be able to log in.
+address — otherwise you can sign in but everything is read-only.
 
 `docker start allocate-db` brings it back after a reboot; `docker rm -f
 allocate-db` throws it away. To work with real data instead, restore the dump in
 `data/` or run `data/seed.py`.
 
-### Google sign-in
+## Auth
 
-Sign-in is Google OAuth only, and **only emails already present in the
-`teammates` table can log in** — everyone else is bounced back to the login page.
-To add someone, add them as a teammate with their work email first.
+Sign-in is Google OAuth only, handled by [Better Auth](https://www.better-auth.com).
+There are three tiers, resolved from the email Google returns:
 
-That rule locks you out of an empty database, since there is no teammate to
-match. `EXTRA_ALLOWED_EMAILS` is the way in: any address listed there can sign in
-regardless of the teammates table, so set it before the first login on a fresh
-deployment. It stays useful afterwards as a break-glass for admins who are not
-themselves on the team.
+| Who | What they get |
+| --- | --- |
+| On the `teammates` list, or in `EXTRA_ALLOWED_EMAILS` | Full edit access |
+| Any other address on an allowed domain (`idinsight.org` by default) | Read-only |
+| Everyone else | Cannot sign in |
+
+Read-only accounts may make GET and HEAD requests and nothing else.
+`src/proxy.ts` enforces this on every request and rejects writes with 403; the UI
+hides editing affordances to match, but the proxy is the boundary that counts.
+
+Tiers are resolved from the database per request rather than stored on the
+session, so both granting and revoking access take effect without signing out.
+Adding someone to the teammates table lets them write immediately, though the UI
+only unlocks its editing affordances after a page reload. Sessions last 30 days
+and are cached in a signed cookie for 5 minutes, so a deleted session survives
+that long — but an access tier is never cached.
+
+`EXTRA_ALLOWED_EMAILS` exists because a fresh database has no teammates, which
+would leave the whole app read-only. It is also a break-glass for admins who are
+not themselves on the team.
+
+### Login history
+
+Better Auth deletes `session` rows on sign-out and expiry, so they show who is
+signed in now, not who has ever signed in. Every sign-in is therefore also
+appended to a `login_log` table (email, name, `access` tier, IP, user agent,
+timestamp),
+which is never pruned:
+
+```sql
+SELECT "createdAt", email, access, "ipAddress" FROM login_log ORDER BY "createdAt" DESC LIMIT 20;
+```
+
+### Google client setup
 
 In the [Google Cloud console](https://console.cloud.google.com/apis/credentials),
 create an OAuth 2.0 Web application client and register an authorised redirect
-URI for every origin you run on, each ending in `/api/auth/google/callback`:
+URI for every origin you run on, each ending in `/api/auth/callback/google`:
 
 ```text
-http://localhost:3000/api/auth/google/callback
-https://your-deployment.example.com/api/auth/google/callback
+http://localhost:3000/api/auth/callback/google
+https://your-deployment.example.com/api/auth/callback/google
 ```
 
 Google requires an exact full-path match, so a bare origin will not work.
@@ -87,7 +117,10 @@ Google requires an exact full-path match, so a bare origin will not work.
 Every endpoint lives under `/api` and requires auth: either a browser session
 cookie, or a read-only key from `READONLY_API_KEYS` passed as
 `Authorization: Bearer <key>` (or `x-api-key`). Read-only keys may only make GET
-requests; anything else returns 403.
+and HEAD requests; anything else returns 403. The exception is `/api/auth/*`,
+which Better Auth serves and which must stay reachable to signed-out visitors.
+Pages are gated too — an unauthenticated browser request is redirected to
+`/login`.
 
 The full contract is served as OpenAPI 3.1 from
 [`/api/openapi`](http://localhost:3000/api/openapi) — hand an agent the base URL

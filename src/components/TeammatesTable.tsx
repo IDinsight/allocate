@@ -1,4 +1,5 @@
 "use client";
+import { useCanEdit } from "@/lib/access";
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import type { Teammate } from "./TeammatesSidebar";
@@ -327,6 +328,7 @@ function TeammateRow({
   onUpdate: (id: string, field: string, value: unknown) => void;
   onDelete: (id: string) => void;
 }) {
+  const canEdit = useCanEdit();
   const [confirming, setConfirming] = useState(false);
   const isDraft = teammate.id.startsWith("temp-");
 
@@ -403,6 +405,7 @@ function TeammateRow({
             onSave={(v) => onUpdate(teammate.id, "status", v)}
             disabled={isDraft}
           />
+          {canEdit && (
           <button
             onClick={() => setConfirming(true)}
             className="flex items-center justify-center text-zinc-300 hover:text-rose-500 transition-colors px-2"
@@ -422,6 +425,7 @@ function TeammateRow({
               />
             </svg>
           </button>
+          )}
         </>
       )}
     </div>

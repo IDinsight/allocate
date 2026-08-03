@@ -12,8 +12,11 @@ import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
 import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration } from "@/lib/liveSync";
 import usePolling from "@/hooks/usePolling";
+import { AccessProvider, useCanEdit } from "@/lib/access";
+import { signOut } from "@/lib/authClient";
 
-export default function Home() {
+function HomeInner() {
+  const canEdit = useCanEdit();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
   // useSearchParams (vs window.location) returns the same value on server
@@ -112,7 +115,7 @@ export default function Home() {
   };
 
   const handleSignOut = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
+    await signOut();
     router.push("/login");
   };
 
@@ -219,7 +222,7 @@ export default function Home() {
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-center gap-8 bg-white mt-14 mb-10">
+      <header className="relative flex items-center justify-center gap-8 bg-white mt-14 mb-10">
         <svg className="flex-1 h-3" preserveAspectRatio="none" viewBox="0 0 100 10">
           <path d="M0 5 Q8.33 0 16.67 5 T33.33 5 T50 5 T66.67 5 T83.33 5 T100 5" fill="none" stroke="#1a1a1a" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
         </svg>
@@ -256,6 +259,14 @@ export default function Home() {
             TEAM VIEW
           </button>
         </div>
+        {!canEdit && (
+          <span
+            className="absolute left-1/2 top-full -translate-x-1/2 mt-0.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400"
+            title="You're not on the teammates list, so you can view but not edit."
+          >
+            read only
+          </span>
+        )}
         <svg className="flex-1 h-3" preserveAspectRatio="none" viewBox="0 0 100 10">
           <path d="M0 5 Q8.33 0 16.67 5 T33.33 5 T50 5 T66.67 5 T83.33 5 T100 5" fill="none" stroke="#1a1a1a" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
         </svg>
@@ -327,5 +338,13 @@ export default function Home() {
 
       {!dataLoading && !loadError && <Notepad />}
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <AccessProvider>
+      <HomeInner />
+    </AccessProvider>
   );
 }

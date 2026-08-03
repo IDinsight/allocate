@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "@/lib/authClient";
 
 const TITLE = "C  L  I  C  K      H  E  R  E    T  O    A  L  L  O  C  A  T  E";
 
@@ -43,9 +44,15 @@ export default function LoginCard({ error }: { error?: string }) {
               revealed ? "opacity-100 scale-100" : "opacity-0 scale-110 pointer-events-none"
             }`}
           >
-            <a
-              href="/api/auth/google"
-              onClick={() => setLoading(true)}
+            <button
+              onClick={() => {
+                setLoading(true);
+                signIn.social({
+                  provider: "google",
+                  callbackURL: "/",
+                  errorCallbackURL: "/login",
+                });
+              }}
               className="flex items-center gap-3 rounded-full border border-zinc-300 bg-white px-6 py-3 text-base font-semibold text-zinc-800 shadow-sm transition hover:border-zinc-400 hover:shadow-md"
             >
               <svg viewBox="0 0 18 18" className="h-5 w-5" aria-hidden="true">
@@ -61,13 +68,13 @@ export default function LoginCard({ error }: { error?: string }) {
                   </span>
                 ))}
               </span>
-            </a>
+            </button>
           </div>
 
           {error && (
             <span className="absolute -bottom-10 left-0 right-0 text-center text-sm text-zinc-500">
-              {error === "denied"
-                ? "that email isn't on the team yet :("
+              {error === "NOT_ALLOWED"
+                ? "that account can't sign in — use your IDinsight email :("
                 : "sign-in failed, try again :("}
             </span>
           )}

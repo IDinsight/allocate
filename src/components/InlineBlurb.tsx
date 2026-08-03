@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useCanEdit } from "@/lib/access";
 
 interface Props {
   value: string | null;
@@ -9,13 +10,17 @@ interface Props {
 }
 
 export default function InlineBlurb({ value, onSave, disabled }: Props) {
+  const canEdit = useCanEdit();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
+  const [lastValue, setLastValue] = useState(value);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  // Resync the draft when the row is updated from elsewhere (polling).
+  if (value !== lastValue) {
+    setLastValue(value);
     setDraft(value ?? "");
-  }, [value]);
+  }
 
   useEffect(() => {
     if (editing && textareaRef.current) {
@@ -41,11 +46,11 @@ export default function InlineBlurb({ value, onSave, disabled }: Props) {
     );
   }
 
-  if (!editing) {
+  if (!editing || !canEdit) {
     return (
       <div
-        className="cell-editable flex items-center px-3 py-2 text-sm min-h-[36px] cursor-text overflow-hidden"
-        onClick={() => setEditing(true)}
+        className={`flex items-center px-3 py-2 text-sm min-h-[36px] overflow-hidden ${canEdit ? "cell-editable cursor-text" : ""}`}
+        onClick={canEdit ? () => setEditing(true) : undefined}
         title={value ?? undefined}
       >
         <span className="truncate">

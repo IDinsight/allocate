@@ -1,4 +1,5 @@
 "use client";
+import { useCanEdit } from "@/lib/access";
 
 import { Dispatch, SetStateAction, useRef, useState } from "react";
 import ProjectsTable from "./ProjectsTable";
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, projects, setProjects, teammates, disabled }: Props) {
+  const canEdit = useCanEdit();
   const [closing, setClosing] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
   const [clearFilters, setClearFilters] = useState<(() => void) | null>(null);
@@ -190,14 +192,14 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
                   Clear all
                 </button>
               </div>
-            ) : (
+            ) : canEdit ? (
               <button
                 onClick={handleCreate}
                 className="btn-chunky flex h-9 items-center gap-1.5 rounded-lg bg-violet-100 px-3 text-sm font-bold text-violet-800"
               >
                 <span className="text-lg leading-none">+</span> New
               </button>
-            )}
+            ) : null}
           </div>
 
           {/* Content */}

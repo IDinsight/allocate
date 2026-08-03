@@ -1,5 +1,7 @@
 "use client";
 
+import { useCanEdit } from "@/lib/access";
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import usePolling from "@/hooks/usePolling";
 
@@ -9,6 +11,7 @@ const HEADER = 30;
 const MARGIN_BOTTOM = -10;
 
 export default function Notepad() {
+  const canEdit = useCanEdit();
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -156,8 +159,9 @@ export default function Notepad() {
             className="w-full h-full resize-none bg-transparent px-4 pl-11 py-2 text-sm text-zinc-800 outline-none font-mono leading-6"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Jot something down..."
+            placeholder={canEdit ? "Jot something down..." : ""}
             spellCheck={false}
+            readOnly={!canEdit}
           />
         </div>
       </div>

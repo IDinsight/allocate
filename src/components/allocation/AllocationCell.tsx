@@ -2,6 +2,7 @@
 
 import { memo, useState, useRef, useEffect } from "react";
 import { beginEditing } from "@/lib/liveSync";
+import { useCanEdit } from "@/lib/access";
 
 const CELL_WIDTH = 56;
 const CELL_ATTR = "data-alloc-col";
@@ -97,6 +98,7 @@ interface Props {
 }
 
 function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, unsaved, previewFraction, onEdit }: Props) {
+  const canEdit = useCanEdit();
   const [mode, setMode] = useState<"idle" | "selected" | "editing">("idle");
   const [draft, setDraft] = useState("");
   const [flashRed, setFlashRed] = useState(false);
@@ -283,6 +285,7 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
         if (mode !== "selected") setMode("selected");
       }}
       onDoubleClick={() => {
+        if (!canEdit) return;
         setDraft(displayValue);
         setMode("editing");
       }}
@@ -291,15 +294,17 @@ function AllocationCellInner({ fraction, colIndex, teammateTotal, isMonthStart, 
         handleArrowKeys(e, false);
         if (e.key === "Delete" || e.key === "Backspace") {
           e.preventDefault();
+          if (!canEdit) return;
           if (fraction != null) onEdit(null);
           setMode("idle");
         } else if (e.key === "Escape") {
           setMode("idle");
         } else if (e.key === "Enter") {
           e.preventDefault();
+          if (!canEdit) return;
           setDraft(displayValue);
           setMode("editing");
-        } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+        } else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && canEdit) {
           // Start typing — enter edit mode with the typed character as initial draft
           e.preventDefault();
           setDraft(e.key);

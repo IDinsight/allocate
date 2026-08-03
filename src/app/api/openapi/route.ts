@@ -12,14 +12,16 @@ const spec = {
     title: "Allocate API",
     version: "1.0.0",
     description:
-      "Staff allocation tracker. All endpoints require auth. A read-only API " +
-      "key (`Authorization: Bearer <key>`) grants access to GET requests only; " +
-      "non-GET methods with such a key return 403. Browser sessions (the signed " +
-      "`session` cookie, obtained by signing in with Google as a known " +
-      "teammate) may use every method; unauthenticated /api/* requests get 401.",
+      "Staff allocation tracker. All endpoints require auth except /api/auth/*, " +
+      "which serves the sign-in flow. A read-only API key (`Authorization: " +
+      "Bearer <key>`, or the `x-api-key` header) grants GET and HEAD only; any " +
+      "other method returns 403. Browser sessions come from signing in with " +
+      "Google: teammates may use every method, while other allowed-domain " +
+      "accounts are read-only and get 403 on writes. Unauthenticated requests " +
+      "get 401.",
   },
   servers: [{ url: "/", description: "Same origin as this document" }],
-  security: [{ bearerAuth: [] }],
+  security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
   tags: [
     { name: "projects" },
     { name: "teammates" },
@@ -468,45 +470,75 @@ const spec = {
         responses: { "200": { description: "OpenAPI 3.1 spec" } },
       },
     },
-    "/api/auth/google": {
+    "/api/auth/{path}": {
       get: {
         tags: ["auth"],
-        summary: "Start Google sign-in",
+        summary: "Better Auth endpoints (browser flow)",
         description:
-          "Sets a short-lived `oauth_state` cookie and redirects to Google's " +
-          "consent screen. Browser-only; not useful to API clients.",
-        security: [],
-        responses: {
-          "307": { description: "Redirect to Google" },
-        },
-      },
-    },
-    "/api/auth/google/callback": {
-      get: {
-        tags: ["auth"],
-        summary: "Google OAuth redirect target",
-        description:
-          "Exchanges the authorization code for an ID token. If the verified " +
-          "Google email matches a teammate record — or is listed in the " +
-          "`EXTRA_ALLOWED_EMAILS` env var, which exists so a fresh database " +
-          "isn't locked out — sets the signed `session` cookie and redirects " +
-          "to `/`. Otherwise redirects to `/login?error=denied` (unknown " +
-          "email) or `/login?error=oauth`.",
+          "Sign-in, the Google OAuth callback (`/api/auth/callback/google`), " +
+          "session lookup and sign-out are all served by Better Auth under " +
+          "this prefix. Browser-only; API clients should use a read-only key " +
+          "instead. Accounts that may not sign in are redirected to " +
+          "`/login?error=NOT_ALLOWED`.",
         security: [],
         parameters: [
-          { name: "code", in: "query", schema: { type: "string" } },
-          { name: "state", in: "query", schema: { type: "string" } },
+          {
+            name: "path",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Better Auth sub-path, e.g. `callback/google`",
+          },
         ],
         responses: {
-          "307": { description: "Redirect to `/` on success, `/login` otherwise" },
+          "200": { description: "Endpoint-specific payload" },
+          "302": { description: "Redirect (OAuth flows)" },
         },
       },
-    },
-    "/api/auth/logout": {
       post: {
         tags: ["auth"],
-        summary: "Clear the session cookie",
-        responses: { "200": { description: "Logged out" } },
+        summary: "Better Auth endpoints (sign-in, sign-out)",
+        security: [],
+        parameters: [
+          {
+            name: "path",
+            in: "path",
+            required: true,
+            schema: { type: "string" },
+            description: "Better Auth sub-path, e.g. `sign-in/social`",
+          },
+        ],
+        responses: { "200": { description: "Endpoint-specific payload" } },
+      },
+    },
+    "/api/me": {
+      get: {
+        tags: ["auth"],
+        summary: "The signed-in account and its access tier",
+        description:
+          "`access` is `edit` for teammates and `EXTRA_ALLOWED_EMAILS` " +
+          "addresses, `read` for anyone else on an allowed email domain. " +
+          "Read-only accounts get 403 on anything but GET and HEAD; accounts " +
+          "on neither list are rejected outright, so `none` never reaches a " +
+          "caller.",
+        responses: {
+          "200": {
+            description: "Current account",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    email: { type: "string" },
+                    name: { type: "string" },
+                    access: { type: "string", enum: ["edit", "read"] },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "Not signed in" },
+        },
       },
     },
   },
@@ -516,7 +548,13 @@ const spec = {
         type: "http",
         scheme: "bearer",
         description:
-          "Read-only API key. Grants GET access to /api/* only; non-GET returns 403.",
+          "Read-only API key. Grants GET/HEAD on /api/* only; anything else returns 403.",
+      },
+      apiKeyAuth: {
+        type: "apiKey",
+        in: "header",
+        name: "x-api-key",
+        description: "The same read-only key, as a header instead of a Bearer token.",
       },
     },
     schemas: {

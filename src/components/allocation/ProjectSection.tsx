@@ -6,6 +6,7 @@ import type { Teammate } from "@/components/TeammatesSidebar";
 import AllocationCell from "./AllocationCell";
 import TotalsCell from "./TotalsCell";
 import useDragToFill from "@/hooks/useDragToFill";
+import { useCanEdit } from "@/lib/access";
 import { STATUS_COLORS } from "@/lib/statusColors";
 import { Plus } from "lucide-react";
 
@@ -73,6 +74,7 @@ export default function ProjectSection({
   onAddTeammate,
   onRemovePair,
 }: Props) {
+  const canEdit = useCanEdit();
   const [hovering, setHovering] = useState(false);
   const [adding, setAdding] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -170,7 +172,7 @@ export default function ProjectSection({
         </div>
 
         {/* Add teammate button — appears on hover, aligned with last row */}
-        {hovering && !adding && !totalsOnly && availableTeammates.length > 0 && (
+        {canEdit && hovering && !adding && !totalsOnly && availableTeammates.length > 0 && (
           <button
             onClick={() => setAdding(true)}
             className="btn-chunky btn-chunky-muted absolute bottom-2 right-2 rounded"
@@ -220,6 +222,7 @@ export default function ProjectSection({
                 style={{ backgroundColor: bgColor }}
                 onMouseEnter={() => setHovering(false)}
                 onMouseDown={(e) => {
+                  if (!canEdit) return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const idx = Math.floor((e.clientX - rect.left) / CELL_WIDTH);
                   const ws = weekStarts[idx];

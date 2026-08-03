@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -65,13 +66,13 @@ enum ProjectStatus {
 // ─── Models ───────────────────────────────────────────────
 
 model Teammate {
-  id     String          @id @default(cuid())
+  id     String         @id @default(cuid())
   name   String
-  email  String?         @unique
+  email  String?        @unique
   role   Role?
   level  Level?
   region Region?
-  status TeammateStatus  @default(Active)
+  status TeammateStatus @default(Active)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -84,17 +85,17 @@ model Teammate {
 }
 
 model Project {
-  id                    String         @id @default(cuid())
+  id                    String        @id @default(cuid())
   name                  String
   pillar                Pillar?
   region                Region?
   billingRate           BillingRate?
-  status                ProjectStatus  @default(Upcoming)
+  status                ProjectStatus @default(Upcoming)
   conversionProbability Int?
-  billable              Boolean        @default(false)
+  billable              Boolean       @default(false)
   unit4Code             String?
-  startDate             DateTime?      @db.Date
-  endDate               DateTime?      @db.Date
+  startDate             DateTime?     @db.Date
+  endDate               DateTime?     @db.Date
   blurb                 String?
 
   leadId String?
@@ -137,4 +138,86 @@ model Notepad {
   updatedAt DateTime @updatedAt
 
   @@map("notepad")
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// Append-only login history. Better Auth's `session` rows are deleted on
+// sign-out and expiry, so they record who is signed in now, not who has ever
+// signed in. Email and name are copied in rather than joined so the history
+// stays readable after a user row is deleted.
+model LoginLog {
+  id        String   @id @default(cuid())
+  userId    String
+  email     String
+  name      String?
+  access    String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([email])
+  @@index([createdAt])
+  @@map("login_log")
 }

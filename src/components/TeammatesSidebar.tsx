@@ -1,4 +1,5 @@
 "use client";
+import { useCanEdit } from "@/lib/access";
 
 import { Dispatch, SetStateAction, useRef, useState } from "react";
 import TeammatesTable from "./TeammatesTable";
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, teammates, setTeammates, disabled }: Props) {
+  const canEdit = useCanEdit();
   const [closing, setClosing] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
   const [clearFilters, setClearFilters] = useState<(() => void) | null>(null);
@@ -174,14 +176,14 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
                   Clear all
                 </button>
               </div>
-            ) : (
+            ) : canEdit ? (
               <button
                 onClick={handleCreate}
                 className="btn-chunky flex h-9 items-center gap-1.5 rounded-lg bg-emerald-100 px-3 text-sm font-bold text-emerald-800"
               >
                 <span className="text-lg leading-none">+</span> New
               </button>
-            )}
+            ) : null}
           </div>
 
           {/* Content */}

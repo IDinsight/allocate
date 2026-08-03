@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, forwardRef } from "react";
+import { useCanEdit } from "@/lib/access";
 
 interface Props {
   value: string;
@@ -11,6 +12,7 @@ interface Props {
 
 const InlineText = forwardRef<HTMLInputElement, Props>(
   ({ value, placeholder, onSave, autoFocus }, ref) => {
+    const canEdit = useCanEdit();
     const [editing, setEditing] = useState(!!autoFocus);
     const [draft, setDraft] = useState(value);
     const innerRef = useRef<HTMLInputElement>(null);
@@ -29,11 +31,11 @@ const InlineText = forwardRef<HTMLInputElement, Props>(
       }
     };
 
-    if (!editing) {
+    if (!editing || !canEdit) {
       return (
         <div
-          className="cell-editable flex items-center px-3 py-2 text-sm min-h-[36px] cursor-text overflow-hidden"
-          onClick={() => setEditing(true)}
+          className={`flex items-center px-3 py-2 text-sm min-h-[36px] overflow-hidden ${canEdit ? "cell-editable cursor-text" : ""}`}
+          onClick={canEdit ? () => setEditing(true) : undefined}
         >
           <span className="truncate">{value || (
             <span className="text-zinc-300 italic">{placeholder ?? "—"}</span>

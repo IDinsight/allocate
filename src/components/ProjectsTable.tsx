@@ -1,4 +1,5 @@
 "use client";
+import { useCanEdit } from "@/lib/access";
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import type { Project } from "./ProjectsSidebar";
@@ -349,6 +350,7 @@ function ProjectRow({
   onUpdate: (id: string, field: string, value: unknown) => void;
   onDelete: (id: string) => void;
 }) {
+  const canEdit = useCanEdit();
   const [confirming, setConfirming] = useState(false);
   const isDraft = project.id.startsWith("temp-");
 
@@ -466,6 +468,7 @@ function ProjectRow({
             onSave={(v) => onUpdate(project.id, "blurb", v)}
             disabled={isDraft}
           />
+          {canEdit && (
           <button
             onClick={() => setConfirming(true)}
             className="flex items-center justify-center text-zinc-300 hover:text-rose-500 transition-colors px-2"
@@ -485,6 +488,7 @@ function ProjectRow({
               />
             </svg>
           </button>
+          )}
         </>
       )}
     </div>

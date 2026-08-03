@@ -7,6 +7,7 @@ import type { Allocation } from "./ProjectSection";
 import AllocationCell from "./AllocationCell";
 import TotalsCell from "./TotalsCell";
 import useDragToFill from "@/hooks/useDragToFill";
+import { useCanEdit } from "@/lib/access";
 import { Plus } from "lucide-react";
 
 export const TEAMMATE_INFO_WIDTH = 140;
@@ -57,6 +58,7 @@ export default function TeammateSection({
   onAddProject,
   onRemovePair,
 }: Props) {
+  const canEdit = useCanEdit();
   const [hovering, setHovering] = useState(false);
   const [adding, setAdding] = useState(false);
   const selectRef = useRef<HTMLSelectElement>(null);
@@ -134,7 +136,7 @@ export default function TeammateSection({
         </div>
 
         {/* Add project button — appears on hover */}
-        {hovering && !adding && !totalsOnly && availableProjects.length > 0 && (
+        {canEdit && hovering && !adding && !totalsOnly && availableProjects.length > 0 && (
           <button
             onClick={() => setAdding(true)}
             className="btn-chunky btn-chunky-muted absolute bottom-9 right-2 rounded"
@@ -185,6 +187,7 @@ export default function TeammateSection({
                 style={{ backgroundColor: bgColor }}
                 onMouseEnter={() => setHovering(false)}
                 onMouseDown={(e) => {
+                  if (!canEdit) return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const idx = Math.floor((e.clientX - rect.left) / CELL_WIDTH);
                   const ws = weekStarts[idx];
