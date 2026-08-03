@@ -30,6 +30,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `DIRECT_URL` | Direct connection, used for migrations |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client, for sign-in |
 | `AUTH_SECRET` | Signs the session cookie. Generate with `openssl rand -hex 32` |
+| `EXTRA_ALLOWED_EMAILS` | Optional, comma-separated. Emails that may sign in without a teammate record |
 | `READONLY_API_KEYS` | Optional, comma-separated. Grants GET-only API access |
 
 ### Optional: a local Postgres
@@ -51,14 +52,8 @@ DIRECT_URL=postgresql://postgres:allocate@localhost:5433/allocate
 ```
 
 Then `pnpm exec prisma migrate deploy` creates the schema. No extensions are
-needed. Since the database starts empty and sign-in requires a matching teammate
-row, insert yourself before your first login:
-
-```bash
-docker exec allocate-db psql -U postgres -d allocate -c \
-  "INSERT INTO teammates (id, name, email, status, \"createdAt\", \"updatedAt\")
-   VALUES ('me', 'Your Name', 'you@idinsight.org', 'Active', now(), now());"
-```
+needed. The database starts empty, so set `EXTRA_ALLOWED_EMAILS` to your own
+address or you will not be able to log in.
 
 `docker start allocate-db` brings it back after a reboot; `docker rm -f
 allocate-db` throws it away. To work with real data instead, restore the dump in
@@ -69,6 +64,12 @@ allocate-db` throws it away. To work with real data instead, restore the dump in
 Sign-in is Google OAuth only, and **only emails already present in the
 `teammates` table can log in** — everyone else is bounced back to the login page.
 To add someone, add them as a teammate with their work email first.
+
+That rule locks you out of an empty database, since there is no teammate to
+match. `EXTRA_ALLOWED_EMAILS` is the way in: any address listed there can sign in
+regardless of the teammates table, so set it before the first login on a fresh
+deployment. It stays useful afterwards as a break-glass for admins who are not
+themselves on the team.
 
 In the [Google Cloud console](https://console.cloud.google.com/apis/credentials),
 create an OAuth 2.0 Web application client and register an authorised redirect

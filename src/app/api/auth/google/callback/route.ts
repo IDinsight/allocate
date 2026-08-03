@@ -6,6 +6,22 @@ import { getGoogleCreds, redirectUri, requestOrigin, STATE_COOKIE } from "@/lib/
 // Google redirects here after consent. Exchange the code for an ID token,
 // verify the email belongs to a teammate, and start a signed session.
 
+// Sign-in normally requires a teammate record, which leaves a fresh database
+// with nobody able to log in. EXTRA_ALLOWED_EMAILS bootstraps past that: those
+// addresses may sign in whether or not they are on the team yet.
+const EXTRA_ALLOWED_EMAILS = (process.env.EXTRA_ALLOWED_EMAILS ?? "")
+  .split(",")
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+async function isAllowed(email: string): Promise<boolean> {
+  if (EXTRA_ALLOWED_EMAILS.includes(email)) return true;
+  const teammate = await prisma.teammate.findFirst({
+    where: { email: { equals: email, mode: "insensitive" } },
+  });
+  return teammate !== null;
+}
+
 function loginRedirect(req: NextRequest, error?: string) {
   const url = new URL("/login", requestOrigin(req));
   if (error) url.searchParams.set("error", error);
@@ -58,10 +74,7 @@ export async function GET(req: NextRequest) {
   }
   if (!email || !verified) return loginRedirect(req, "oauth");
 
-  const teammate = await prisma.teammate.findFirst({
-    where: { email: { equals: email, mode: "insensitive" } },
-  });
-  if (!teammate) return loginRedirect(req, "denied");
+  if (!(await isAllowed(email))) return loginRedirect(req, "denied");
 
   const token = await createSessionToken({ email, name });
   const res = NextResponse.redirect(new URL("/", requestOrigin(req)));

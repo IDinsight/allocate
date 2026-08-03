@@ -487,9 +487,11 @@ const spec = {
         summary: "Google OAuth redirect target",
         description:
           "Exchanges the authorization code for an ID token. If the verified " +
-          "Google email matches a teammate record, sets the signed `session` " +
-          "cookie and redirects to `/`. Otherwise redirects to " +
-          "`/login?error=denied` (unknown email) or `/login?error=oauth`.",
+          "Google email matches a teammate record — or is listed in the " +
+          "`EXTRA_ALLOWED_EMAILS` env var, which exists so a fresh database " +
+          "isn't locked out — sets the signed `session` cookie and redirects " +
+          "to `/`. Otherwise redirects to `/login?error=denied` (unknown " +
+          "email) or `/login?error=oauth`.",
         security: [],
         parameters: [
           { name: "code", in: "query", schema: { type: "string" } },
