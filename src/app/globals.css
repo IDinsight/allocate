@@ -88,7 +88,7 @@ html, body {
 
 .wavy-text span {
   display: inline-block;
-  animation: wavyText 1.4s ease-in-out infinite;
+  animation: wavyText 0.6s ease-in-out infinite;
 }
 
 @keyframes cellFlashRed {

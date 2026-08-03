@@ -2,8 +2,15 @@
 
 import { useState } from "react";
 import { signIn } from "@/lib/authClient";
+import { colorLetters, type Run } from "@/lib/colorLetters";
+import Loader from "@/components/Loader";
 
-const TITLE = "C  L  I  C  K      H  E  R  E    T  O    A  L  L  O  C  A  T  E";
+const TITLE: Run[] = [
+  ["C  L  I  C  K", "#ff943c"],
+  ["      H  E  R  E", "#56a2ff"],
+  ["    T  O", "#059669"],
+  ["    A  L  L  O  C  A  T  E", "#7e22ce"],
+];
 
 export default function LoginCard({ error }: { error?: string }) {
   const [hovering, setHovering] = useState(false);
@@ -19,30 +26,22 @@ export default function LoginCard({ error }: { error?: string }) {
       onMouseLeave={() => setHovering(false)}
     >
       {loading ? (
-        <div className="wavy-loader flex gap-1.5 text-2xl font-black">
-          {["L", "O", "A", "D", "I", "N", "G"].map((ch, i) => (
-            <span key={i} style={{ animationDelay: `${i * 0.1}s` }}>{ch}</span>
-          ))}
-        </div>
+        <Loader size="lg" />
       ) : (
         <>
           {/* Title — visible until the button is revealed */}
           <h1
             onClick={() => setPinned(true)}
-            className={`wavy-loader flex gap-0.5 text-2xl font-bold text-zinc-900 transition-all duration-300 cursor-default select-none ${
-              revealed ? "opacity-0 scale-90" : "opacity-100 scale-100"
-            }`}
+            className={`wavy-loader flex gap-0.5 text-2xl font-bold transition-all duration-300 cursor-default select-none ${revealed ? "opacity-0 scale-90" : "opacity-100 scale-100"
+              }`}
           >
-            {TITLE.split("").map((ch, i) => (
-              <span key={i} style={{ animationDelay: `${i * 0.02}s` }}>{ch}</span>
-            ))}
+            {colorLetters(TITLE, 0.02)}
           </h1>
 
           {/* Google sign-in — appears on hover or click */}
           <div
-            className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${
-              revealed ? "opacity-100 scale-100" : "opacity-0 scale-110 pointer-events-none"
-            }`}
+            className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${revealed ? "opacity-100 scale-100" : "opacity-0 scale-110 pointer-events-none"
+              }`}
           >
             <button
               onClick={() => {
@@ -63,7 +62,7 @@ export default function LoginCard({ error }: { error?: string }) {
               </svg>
               <span className="wavy-text">
                 {"Sign in with Google".split("").map((ch, i) => (
-                  <span key={i} style={{ animationDelay: `${i * 0.05}s` }}>
+                  <span key={i} style={{ animationDelay: `${i * 0.04}s` }}>
                     {ch === " " ? " " : ch}
                   </span>
                 ))}

@@ -13,6 +13,7 @@ import type { Allocation } from "@/components/allocation/ProjectSection";
 import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration } from "@/lib/liveSync";
 import usePolling from "@/hooks/usePolling";
 import { AccessProvider, useCanEdit } from "@/lib/access";
+import Loader from "@/components/Loader";
 import { signOut } from "@/lib/authClient";
 
 function HomeInner() {
@@ -280,19 +281,7 @@ function HomeInner() {
           </div>
         ) : dataLoading ? (
           <div className="flex h-full items-center justify-center">
-            <div className="wavy-loader flex gap-1.5 text-md font-black">
-              {Array.from({ length: 3 }, () => [..."LOADING"]).flat().map((ch, i) => (
-                <span
-                  key={i}
-                  style={{
-                    animationDelay: `${i * 0.1}s`,
-                    color: ["#7e22ce", "#7e22ce", "#1a1a1a", "#1a1a1a", "#1a1a1a", "#059669", "#059669"][i],
-                  }}
-                >
-                  {ch}
-                </span>
-              ))}
-            </div>
+            <Loader />
           </div>
         ) : (
           <AllocationView
