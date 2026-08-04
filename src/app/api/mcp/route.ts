@@ -53,7 +53,10 @@ const mondayOf = (d: Date) => {
   return x;
 };
 
-const DEFAULT_WINDOW_WEEKS = 12;
+// Default window when no from/to is given: ~3 months back and ~3 months
+// ahead of the current week.
+const DEFAULT_PAST_WEEKS = 13;
+const DEFAULT_FUTURE_WEEKS = 13;
 
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -134,10 +137,11 @@ const mcpHandler = createMcpHandler(
           "sums that teammate's (or project's) fractions per week — read " +
           "over-allocation (>100) and free capacity (<100) straight off it. " +
           "fraction is % of a work week; week keys are Mondays (YYYY-MM-DD); " +
-          "a missing week means 0. Defaults to the current week plus " +
-          `${DEFAULT_WINDOW_WEEKS} weeks when from/to are omitted — pass ` +
-          "explicit dates for history. Unknown filter names return an error, " +
-          "not an empty result.",
+          "a missing week means 0. When from/to are omitted the result covers " +
+          "roughly 3 months back and 3 months ahead only, and says so in a " +
+          "note — ask the user whether they want a different period rather " +
+          "than assuming this window answers their question. Unknown filter " +
+          "names return an error, not an empty result.",
         inputSchema: z.object({
           groupBy: z
             .enum(["teammate", "project"])
@@ -177,24 +181,39 @@ const mcpHandler = createMcpHandler(
 
         let effectiveFrom = from;
         let effectiveTo = to;
-        if (!from && !to) {
-          const start = mondayOf(new Date());
-          const end = new Date(start);
-          end.setUTCDate(end.getUTCDate() + DEFAULT_WINDOW_WEEKS * 7);
+        const defaulted = !from && !to;
+        if (defaulted) {
+          const monday = mondayOf(new Date());
+          const start = new Date(monday);
+          start.setUTCDate(start.getUTCDate() - DEFAULT_PAST_WEEKS * 7);
+          const end = new Date(monday);
+          end.setUTCDate(end.getUTCDate() + DEFAULT_FUTURE_WEEKS * 7);
           effectiveFrom = start.toISOString().split("T")[0];
           effectiveTo = end.toISOString().split("T")[0];
         }
 
+        const grouped = await getGroupedAllocations(
+          {
+            from: effectiveFrom,
+            to: effectiveTo,
+            teammateIds: teammates?.length ? t.ids : undefined,
+            projectIds: projects?.length ? p.ids : undefined,
+          },
+          groupBy
+        );
         return json(
-          await getGroupedAllocations(
-            {
-              from: effectiveFrom,
-              to: effectiveTo,
-              teammateIds: teammates?.length ? t.ids : undefined,
-              projectIds: projects?.length ? p.ids : undefined,
-            },
-            groupBy
-          )
+          defaulted
+            ? {
+                note:
+                  `No from/to given, so this covers only the default window ` +
+                  `${effectiveFrom} to ${effectiveTo} (≈3 months back and ` +
+                  `ahead). If the user's question concerns another period, ` +
+                  `ask them and re-query with explicit from/to.`,
+                ...grouped,
+                from: effectiveFrom,
+                to: effectiveTo,
+              }
+            : grouped
         );
       }
     );
@@ -206,8 +225,9 @@ const mcpHandler = createMcpHandler(
       "get_allocations returns pre-grouped, pre-summed data keyed by names — " +
       "no id resolution or arithmetic needed: each group's TOTAL row is the " +
       "per-week sum (100 = fully booked). Weeks are Mondays; a missing week " +
-      "means 0. Without from/to it covers the current week plus " +
-      `${DEFAULT_WINDOW_WEEKS} weeks, so pass dates explicitly for history.`,
+      "means 0. Without from/to, get_allocations covers only ≈3 months back " +
+      "and 3 months ahead and flags this in a note — when a question implies " +
+      "a different period, ask the user for the range instead of assuming.",
   }
 );
 
