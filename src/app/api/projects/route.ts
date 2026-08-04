@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { listProjects } from "@/lib/queries";
 
 export async function GET() {
-  const projects = await prisma.project.findMany({
-    include: { lead: { select: { id: true, name: true } } },
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-  });
-  return NextResponse.json(projects);
+  return NextResponse.json(await listProjects());
 }
 
 export async function POST(req: NextRequest) {

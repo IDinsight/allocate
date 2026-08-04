@@ -30,7 +30,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `DIRECT_URL` | Direct connection, used for migrations |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google OAuth client, for sign-in |
 | `BETTER_AUTH_SECRET` | Signs sessions. Generate with `openssl rand -base64 32` |
-| `BETTER_AUTH_URL` | This deployment's public origin, used for OAuth redirects |
+| `BETTER_AUTH_URL` | This deployment's public origin. Used for OAuth redirects, and — for the MCP server — as the OAuth issuer, the `/api/mcp` resource identity, and the allowed browser origin. Required for MCP to work |
 | `ALLOWED_EMAIL_DOMAINS` | Optional, comma-separated. Domains that may sign in. Defaults to `idinsight.org` |
 | `EXTRA_ALLOWED_EMAILS` | Optional, comma-separated. Emails granted edit access without a teammate record |
 | `READONLY_API_KEYS` | Optional, comma-separated. Grants GET-only API access |
@@ -76,6 +76,8 @@ There are three tiers, resolved from the email Google returns:
 Read-only accounts may make GET and HEAD requests and nothing else.
 `src/proxy.ts` enforces this on every request and rejects writes with 403; the UI
 hides editing affordances to match, but the proxy is the boundary that counts.
+The one exception is `/api/mcp`, which authenticates itself with OAuth bearer
+tokens (see [MCP server](#mcp-server)) — its tools are all read-only.
 
 Tiers are resolved from the database per request rather than stored on the
 session, so both granting and revoking access take effect without signing out.
@@ -118,8 +120,10 @@ Google requires an exact full-path match, so a bare origin will not work.
 Every endpoint lives under `/api` and requires auth: either a browser session
 cookie, or a read-only key from `READONLY_API_KEYS` passed as
 `Authorization: Bearer <key>` (or `x-api-key`). Read-only keys may only make GET
-and HEAD requests; anything else returns 403. The exception is `/api/auth/*`,
-which Better Auth serves and which must stay reachable to signed-out visitors.
+and HEAD requests; anything else returns 403. The exceptions are `/api/auth/*`,
+which Better Auth serves and which must stay reachable to signed-out visitors;
+the public OAuth discovery documents under `/.well-known/`; and `/api/mcp`,
+which takes OAuth bearer tokens only — read-only keys do not work there.
 Pages are gated too — an unauthenticated browser request is redirected to
 `/login`.
 
@@ -128,6 +132,28 @@ The full contract is served as OpenAPI 3.1 from
 and a key and point it there. It is hand-written in
 [`src/app/api/openapi/route.ts`](src/app/api/openapi/route.ts) and must be kept
 in sync whenever a route changes.
+
+## MCP server
+
+MCP clients (Claude, Claude Code, MCP Inspector, …) can connect to
+`<origin>/api/mcp` over streamable HTTP for read-only tools: `list_projects`,
+`list_team_members`, and `get_allocations` (filterable by date range, teammate,
+or project). No key or pre-registration is needed — the app is its own OAuth
+2.1 authorization server (clients self-register via Dynamic Client
+Registration), and the user authenticates through the normal Google sign-in,
+with the same access tiers as the browser: `none`-tier accounts cannot
+complete the flow, and a revoked account gets 403 on every tool call.
+
+```bash
+claude mcp add --transport http allocate https://<origin>/api/mcp
+```
+
+On claude.ai or Claude Desktop, add it under Settings → Connectors → Add
+custom connector (remote MCP servers in `claude_desktop_config.json` are
+ignored). `BETTER_AUTH_URL` must be set to the deployment's public origin —
+it is the OAuth issuer and the `/api/mcp` resource identity — but no extra
+Google redirect URI is needed, since clients authorize against this app, not
+Google.
 
 ## Database
 

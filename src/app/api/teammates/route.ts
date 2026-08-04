@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { listTeammates } from "@/lib/queries";
 
 export async function GET() {
-  const teammates = await prisma.teammate.findMany({
-    orderBy: [{ status: "asc" }, { name: "asc" }],
-  });
-  return NextResponse.json(teammates);
+  return NextResponse.json(await listTeammates());
 }
 
 export async function POST(req: NextRequest) {

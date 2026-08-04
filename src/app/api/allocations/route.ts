@@ -1,81 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  getAllocations,
+  getGroupedAllocations,
+  resolveFilterIds,
+} from "@/lib/queries";
+
+const split = (param: string | null) =>
+  (param ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const from = url.searchParams.get("from");
-  const to = url.searchParams.get("to");
-  const teammateIdParam = url.searchParams.get("teammateId");
-  const projectIdParam = url.searchParams.get("projectId");
-
-  const where: Record<string, unknown> = {};
-  if (from || to) {
-    const weekStart: Record<string, Date> = {};
-    if (from) weekStart.gte = new Date(from);
-    if (to) weekStart.lte = new Date(to);
-    where.weekStart = weekStart;
-  }
-  if (teammateIdParam) {
-    const ids = teammateIdParam
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (ids.length === 1) where.teammateId = ids[0];
-    else if (ids.length > 1) where.teammateId = { in: ids };
-  }
-  if (projectIdParam) {
-    const ids = projectIdParam
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-    if (ids.length === 1) where.projectId = ids[0];
-    else if (ids.length > 1) where.projectId = { in: ids };
+  const groupByParam = url.searchParams.get("groupBy");
+  const groupBy =
+    groupByParam === "teammate" || groupByParam === "project"
+      ? groupByParam
+      : null;
+  if (groupByParam && !groupBy) {
+    return NextResponse.json(
+      { error: "groupBy must be 'teammate' or 'project'" },
+      { status: 400 }
+    );
   }
 
-  const [allocations, weekStartsRaw] = await Promise.all([
-    prisma.allocation.findMany({
-      where,
-      select: {
-        id: true,
-        teammateId: true,
-        projectId: true,
-        weekStart: true,
-        fraction: true,
-        isHidden: true,
-      },
-      orderBy: { weekStart: "asc" },
-    }),
-    prisma.allocation.findMany({
-      where,
-      select: { weekStart: true },
-      distinct: ["weekStart"],
-      orderBy: { weekStart: "asc" },
-    }),
+  // teammates/projects take names or ids; the legacy teammateId/projectId
+  // params take ids only and are kept for existing consumers.
+  const [t, p] = await Promise.all([
+    resolveFilterIds("teammate", split(url.searchParams.get("teammates"))),
+    resolveFilterIds("project", split(url.searchParams.get("projects"))),
   ]);
-
-  if (teammateIdParam && allocations.length === 0) {
+  const unmatched = [...t.unmatched, ...p.unmatched];
+  if (unmatched.length > 0) {
     return NextResponse.json(
-      { error: "No teammate found with the given teammateId" },
-      { status: 404 }
-    );
-  }
-  if (projectIdParam && allocations.length === 0) {
-    return NextResponse.json(
-      { error: "No project found with the given projectId" },
-      { status: 404 }
+      { error: `No teammate or project matches: ${unmatched.join(", ")}` },
+      { status: 400 }
     );
   }
 
-  const weekStarts = weekStartsRaw.map(
-    (w) => w.weekStart.toISOString().split("T")[0]
-  );
+  const filter = {
+    from: url.searchParams.get("from") ?? undefined,
+    to: url.searchParams.get("to") ?? undefined,
+    teammateIds: [...split(url.searchParams.get("teammateId")), ...t.ids],
+    projectIds: [...split(url.searchParams.get("projectId")), ...p.ids],
+  };
 
-  const mapped = allocations.map((a) => ({
-    ...a,
-    weekStart: a.weekStart.toISOString().split("T")[0],
-  }));
-
-  return NextResponse.json({ allocations: mapped, weekStarts });
+  if (groupBy) {
+    return NextResponse.json(await getGroupedAllocations(filter, groupBy));
+  }
+  return NextResponse.json(await getAllocations(filter));
 }
 
 export async function POST(req: NextRequest) {

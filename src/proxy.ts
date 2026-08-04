@@ -18,8 +18,18 @@ export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // The login page and Better Auth's own routes must stay reachable to
-  // signed-out visitors, otherwise sign-in can never complete.
-  if (pathname === "/login" || pathname.startsWith("/api/auth/")) {
+  // signed-out visitors, otherwise sign-in can never complete. OAuth
+  // discovery documents under /.well-known/ are public by definition, and
+  // /api/mcp authenticates itself with OAuth bearer tokens via withMcpAuth —
+  // it must be excluded before the API-key check below, which would otherwise
+  // eat the Authorization header and 401 without the WWW-Authenticate
+  // handshake MCP clients rely on. All /api/mcp tools are read-only.
+  if (
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/.well-known/") ||
+    pathname === "/api/mcp"
+  ) {
     return NextResponse.next();
   }
 

@@ -1,5 +1,8 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+// The MCP plugin's server-side exports only resolve through the plugins
+// barrel — "better-auth/plugins/mcp" is not an exported subpath.
+import { mcp } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { APIError } from "better-auth/api";
 import { prisma } from "@/lib/prisma";
@@ -121,5 +124,27 @@ export const auth = betterAuth({
       },
     },
   },
-  plugins: [nextCookies()],
+  plugins: [
+    // Turns this app into the OAuth 2.1 authorization server for the MCP
+    // endpoint at /api/mcp. MCP clients register via Dynamic Client
+    // Registration and their users authenticate through the normal /login
+    // Google flow; the session.create.before hook above blocks "none"-tier
+    // accounts from ever completing it. RFC 8707 requires `resource` to match
+    // the MCP URL exactly as clients enter it, so BETTER_AUTH_URL must be set
+    // to the public origin in production.
+    mcp({
+      loginPage: "/login",
+      ...(process.env.BETTER_AUTH_URL
+        ? { resource: `${new URL(process.env.BETTER_AUTH_URL).origin}/api/mcp` }
+        : {}),
+      oidcConfig: {
+        loginPage: "/login", // required by the type; the plugin uses the outer one
+        requirePKCE: true,
+        accessTokenExpiresIn: 60 * 60, // 1 hour
+        refreshTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
+      },
+    }),
+    // Keep last so it can post-process Set-Cookie headers for Next.js.
+    nextCookies(),
+  ],
 });

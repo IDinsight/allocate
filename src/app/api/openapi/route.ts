@@ -12,13 +12,16 @@ const spec = {
     title: "Allocate API",
     version: "1.0.0",
     description:
-      "Staff allocation tracker. All endpoints require auth except /api/auth/*, " +
-      "which serves the sign-in flow. A read-only API key (`Authorization: " +
+      "Staff allocation tracker. All endpoints require auth except /api/auth/* " +
+      "(the sign-in flow) and the OAuth discovery documents under " +
+      "/.well-known/. A read-only API key (`Authorization: " +
       "Bearer <key>`, or the `x-api-key` header) grants GET and HEAD only; any " +
       "other method returns 403. Browser sessions come from signing in with " +
       "Google: teammates may use every method, while other allowed-domain " +
       "accounts are read-only and get 403 on writes. Unauthenticated requests " +
-      "get 401.",
+      "get 401. MCP clients connect to /api/mcp instead, authenticating with " +
+      "OAuth 2.1 (this app is the authorization server; users sign in with " +
+      "Google) — see the mcp-tagged paths.",
   },
   servers: [{ url: "/", description: "Same origin as this document" }],
   security: [{ bearerAuth: [] }, { apiKeyAuth: [] }],
@@ -29,6 +32,7 @@ const spec = {
     { name: "notepad" },
     { name: "meta" },
     { name: "auth" },
+    { name: "mcp" },
   ],
   paths: {
     "/api/projects": {
@@ -253,7 +257,7 @@ const spec = {
             in: "query",
             required: false,
             description:
-              "Restrict to one or more teammates. Comma-separate multiple ids (e.g. `id1,id2`). Returns 404 if no allocations match.",
+              "Restrict to one or more teammates by id. Comma-separate multiple ids (e.g. `id1,id2`).",
             schema: { type: "string" },
           },
           {
@@ -261,35 +265,69 @@ const spec = {
             in: "query",
             required: false,
             description:
-              "Restrict to one or more projects. Comma-separate multiple ids (e.g. `id1,id2`). Returns 404 if no allocations match.",
+              "Restrict to one or more projects by id. Comma-separate multiple ids (e.g. `id1,id2`).",
             schema: { type: "string" },
+          },
+          {
+            name: "teammates",
+            in: "query",
+            required: false,
+            description:
+              "Restrict to one or more teammates by name (case-insensitive) or id, comma-separated. Unknown terms return 400.",
+            schema: { type: "string" },
+          },
+          {
+            name: "projects",
+            in: "query",
+            required: false,
+            description:
+              "Restrict to one or more projects by name (case-insensitive) or id, comma-separated. Unknown terms return 400.",
+            schema: { type: "string" },
+          },
+          {
+            name: "groupBy",
+            in: "query",
+            required: false,
+            description:
+              "Return the pre-pivoted GroupedAllocations shape instead of flat rows: " +
+              "`teammate` nests teammate → project → {week: fraction}, `project` is the mirror. " +
+              "Each group includes a TOTAL entry summing fractions per week. " +
+              "Hidden allocations are excluded from this view.",
+            schema: { type: "string", enum: ["teammate", "project"] },
           },
         ],
         responses: {
           "200": {
-            description: "Allocations plus the distinct sorted week-starts",
+            description:
+              "Without groupBy: allocations plus the distinct sorted week-starts (empty arrays when nothing matches). " +
+              "With groupBy: the GroupedAllocations shape.",
             content: {
               "application/json": {
                 schema: {
-                  type: "object",
-                  required: ["allocations", "weekStarts"],
-                  properties: {
-                    allocations: {
-                      type: "array",
-                      items: { $ref: "#/components/schemas/Allocation" },
+                  oneOf: [
+                    {
+                      type: "object",
+                      required: ["allocations", "weekStarts"],
+                      properties: {
+                        allocations: {
+                          type: "array",
+                          items: { $ref: "#/components/schemas/Allocation" },
+                        },
+                        weekStarts: {
+                          type: "array",
+                          items: { type: "string", format: "date" },
+                        },
+                      },
                     },
-                    weekStarts: {
-                      type: "array",
-                      items: { type: "string", format: "date" },
-                    },
-                  },
+                    { $ref: "#/components/schemas/GroupedAllocations" },
+                  ],
                 },
               },
             },
           },
-          "404": {
+          "400": {
             description:
-              "No allocations matched the given teammateId or projectId filter",
+              "Invalid groupBy value, or a teammates/projects term matched nothing",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -511,6 +549,69 @@ const spec = {
         responses: { "200": { description: "Endpoint-specific payload" } },
       },
     },
+    "/api/mcp": {
+      post: {
+        tags: ["mcp"],
+        summary: "MCP endpoint (streamable HTTP, JSON-RPC)",
+        description:
+          "Model Context Protocol server exposing read-only tools: " +
+          "`list_projects`, `list_team_members`, and `get_allocations`. Not a " +
+          "REST endpoint — connect with an MCP client, which authenticates " +
+          "via OAuth 2.1 with PKCE and Dynamic Client Registration " +
+          "(discovery under /.well-known/) and signs the user in through the " +
+          "normal Google flow. Read-only API keys do not work here. " +
+          "Unauthenticated requests get 401 with a `WWW-Authenticate` header " +
+          "pointing at the protected-resource metadata; accounts whose " +
+          "access tier is revoked get 403.",
+        security: [{ mcpOAuth: [] }],
+        responses: {
+          "200": { description: "JSON-RPC response" },
+          "401": { description: "Missing or expired bearer token" },
+          "403": {
+            description:
+              "Account has no access, or the Origin header is not this deployment",
+          },
+        },
+      },
+      get: {
+        tags: ["mcp"],
+        summary: "MCP server-to-client stream (streamable HTTP)",
+        security: [{ mcpOAuth: [] }],
+        responses: {
+          "401": { description: "Missing or expired bearer token" },
+          "405": { description: "Stateless server; no standalone stream" },
+        },
+      },
+      delete: {
+        tags: ["mcp"],
+        summary: "MCP session teardown (no-op — sessions are stateless)",
+        security: [{ mcpOAuth: [] }],
+        responses: {
+          "401": { description: "Missing or expired bearer token" },
+          "405": { description: "Stateless server; nothing to tear down" },
+        },
+      },
+    },
+    "/.well-known/oauth-authorization-server": {
+      get: {
+        tags: ["mcp"],
+        summary: "OAuth 2.1 authorization-server metadata (RFC 8414)",
+        security: [],
+        responses: { "200": { description: "Authorization-server metadata" } },
+      },
+    },
+    "/.well-known/oauth-protected-resource": {
+      get: {
+        tags: ["mcp"],
+        summary: "OAuth protected-resource metadata for /api/mcp (RFC 9728)",
+        description:
+          "Also served with the resource path appended " +
+          "(`/.well-known/oauth-protected-resource/api/mcp`), which MCP " +
+          "clients probe first.",
+        security: [],
+        responses: { "200": { description: "Protected-resource metadata" } },
+      },
+    },
     "/api/me": {
       get: {
         tags: ["auth"],
@@ -549,13 +650,32 @@ const spec = {
         type: "http",
         scheme: "bearer",
         description:
-          "Read-only API key. Grants GET/HEAD on /api/* only; anything else returns 403.",
+          "Read-only API key. Grants GET/HEAD on /api/* only; anything else " +
+          "returns 403. Not accepted at /api/mcp, which is OAuth-only.",
       },
       apiKeyAuth: {
         type: "apiKey",
         in: "header",
         name: "x-api-key",
         description: "The same read-only key, as a header instead of a Bearer token.",
+      },
+      mcpOAuth: {
+        type: "oauth2",
+        description:
+          "OAuth 2.1 for /api/mcp only. MCP clients self-register via Dynamic " +
+          "Client Registration; end users authenticate with Google.",
+        flows: {
+          authorizationCode: {
+            authorizationUrl: "/api/auth/mcp/authorize",
+            tokenUrl: "/api/auth/mcp/token",
+            scopes: {
+              openid: "OpenID Connect",
+              profile: "Name and picture",
+              email: "Email address",
+              offline_access: "Refresh tokens",
+            },
+          },
+        },
       },
     },
     schemas: {
@@ -695,6 +815,42 @@ const spec = {
           weekStart: { type: "string", format: "date" },
           fraction: { type: "integer" },
           isHidden: { type: "boolean" },
+        },
+      },
+      GroupedAllocations: {
+        type: "object",
+        description:
+          "Pre-pivoted staffing view. Exactly one of byTeammate/byProject is " +
+          "present, matching the groupBy parameter. Outer keys are names " +
+          "(suffixed with an id fragment only on collision); each group maps " +
+          "its counterpart names to {week: fraction} plus a TOTAL entry " +
+          "summing fractions per week. Weeks are Mondays (YYYY-MM-DD); a " +
+          "missing week means 0. Hidden allocations are excluded.",
+        required: ["unit"],
+        properties: {
+          unit: { type: "string" },
+          from: { type: "string", format: "date" },
+          to: { type: "string", format: "date" },
+          byTeammate: {
+            type: "object",
+            additionalProperties: {
+              type: "object",
+              additionalProperties: {
+                type: "object",
+                additionalProperties: { type: "integer" },
+              },
+            },
+          },
+          byProject: {
+            type: "object",
+            additionalProperties: {
+              type: "object",
+              additionalProperties: {
+                type: "object",
+                additionalProperties: { type: "integer" },
+              },
+            },
+          },
         },
       },
       Notepad: {

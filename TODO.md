@@ -20,6 +20,7 @@
 - Data cleanup
 - Hover-open total allocations view for quick reference
 - google auth
+- MCP server (read-only, OAuth via Google sign-in) at /api/mcp
 
 ## To Do
 
