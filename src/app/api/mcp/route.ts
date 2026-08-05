@@ -1,4 +1,5 @@
 import { createMcpHandler } from "mcp-handler";
+import type { Implementation } from "@modelcontextprotocol/server";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
 import { auth, resolveAccess } from "@/lib/auth";
@@ -57,6 +58,28 @@ const mondayOf = (d: Date) => {
 // ahead of the current week.
 const DEFAULT_PAST_WEEKS = 13;
 const DEFAULT_FUTURE_WEEKS = 13;
+
+const serverInfo = {
+  name: "allocate",
+  version: "2.0.0",
+  title: "Allocate",
+  description: "IDinsight's project staffing tracker.",
+  ...(process.env.BETTER_AUTH_URL && {
+    websiteUrl: process.env.BETTER_AUTH_URL,
+  }),
+  icons: [
+    {
+      src: "data:image/png;base64,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",
+      mimeType: "image/png",
+      sizes: ["128x128"],
+    },
+    {
+      src: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8cmVjdCB4PSIyIiAgeT0iMiIgIHdpZHRoPSIxMyIgaGVpZ2h0PSIxMyIgcng9IjQiIGZpbGw9IiNjNGI1ZmQiLz4KICA8cmVjdCB4PSIxNyIgeT0iMiIgIHdpZHRoPSIxMyIgaGVpZ2h0PSIxMyIgcng9IjQiIGZpbGw9IiNiZmRiZmUiLz4KICA8cmVjdCB4PSIyIiAgeT0iMTciIHdpZHRoPSIxMyIgaGVpZ2h0PSIxMyIgcng9IjQiIGZpbGw9IiNhN2YzZDAiLz4KICA8cmVjdCB4PSIxNyIgeT0iMTciIHdpZHRoPSIxMyIgaGVpZ2h0PSIxMyIgcng9IjQiIGZpbGw9IiNmZGU2OGEiLz4KPC9zdmc+Cg==",
+      mimeType: "image/svg+xml",
+      sizes: ["any"],
+    },
+  ],
+} satisfies Implementation;
 
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -219,7 +242,7 @@ const mcpHandler = createMcpHandler(
     );
   },
   {
-    serverInfo: { name: "allocate", version: "2.0.0" },
+    serverInfo,
     instructions:
       "Read-only access to Allocate, IDinsight's project staffing tracker. " +
       "get_allocations returns pre-grouped, pre-summed data keyed by names — " +
