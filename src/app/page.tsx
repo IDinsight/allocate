@@ -14,12 +14,15 @@ import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration } from "@/lib/
 import usePolling from "@/hooks/usePolling";
 import { AccessProvider, useCanEdit } from "@/lib/access";
 import Loader from "@/components/Loader";
+import SpinningCubeIcon from "@/components/cube/SpinningCubeIcon";
+import CubeMode from "@/components/cube/CubeMode";
 import { signOut } from "@/lib/authClient";
 
 function HomeInner() {
   const canEdit = useCanEdit();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
+  const [cubeOpen, setCubeOpen] = useState(false);
   // useSearchParams (vs window.location) returns the same value on server
   // and client during SSR, so lazy-init from it doesn't cause a hydration
   // mismatch. Requires the Suspense boundary in layout.tsx.
@@ -271,6 +274,17 @@ function HomeInner() {
         <svg className="flex-1 h-3" preserveAspectRatio="none" viewBox="0 0 100 10">
           <path d="M0 5 Q8.33 0 16.67 5 T33.33 5 T50 5 T66.67 5 T83.33 5 T100 5" fill="none" stroke="#1a1a1a" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
         </svg>
+
+        {/* Easter egg: the allocation data as a 3D lattice. Absolutely
+            positioned so it doesn't shift the centred wordmark. */}
+        <button
+          onClick={() => setCubeOpen(true)}
+          aria-label="Cube mode"
+          title="the cube"
+          className="cube-trigger absolute right-4 top-0 -translate-y-1/2 bg-white p-1 hover:cursor-pointer"
+        >
+          <SpinningCubeIcon />
+        </button>
       </header>
 
       {/* Main content */}
@@ -326,6 +340,16 @@ function HomeInner() {
       />
 
       {!dataLoading && !loadError && <Notepad />}
+
+      {cubeOpen && (
+        <CubeMode
+          projects={projects}
+          teammates={teammates}
+          allocations={allocations}
+          weekStarts={weekStarts}
+          onClose={() => setCubeOpen(false)}
+        />
+      )}
     </div>
   );
 }
