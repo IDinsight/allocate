@@ -8,7 +8,6 @@ import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
 import Loader from "@/components/Loader";
 import useCubeData from "./useCubeData";
-import type { Axis } from "./CubeScene";
 
 // three.js is ~150KB gzipped — keep it out of the main bundle and off the
 // server (WebGL has no SSR story).
@@ -21,21 +20,27 @@ const CubeScene = dynamic(() => import("./CubeScene"), {
   ),
 });
 
-const TRANSITION_MS = 420;
+/** Growing out of the logo is the showy bit; collapsing back should get out of
+ *  the way, so it runs a good deal quicker. */
+const OPEN_MS = 420;
+const CLOSE_MS = 170;
 
 type Props = {
   projects: Project[];
   teammates: Teammate[];
   allocations: Allocation[];
   weekStarts: string[];
+  /** Fired when the shrink starts, so the header logo can fade back in with it. */
+  onCollapse: () => void;
   onClose: () => void;
 };
 
-export default function CubeMode({ projects, teammates, allocations, weekStarts, onClose }: Props) {
+export default function CubeMode({
+  projects, teammates, allocations, weekStarts, onCollapse, onClose,
+}: Props) {
   const data = useCubeData(projects, teammates, allocations, weekStarts);
   const [collapsed, setCollapsed] = useState(true);
-  const [mounted, setMounted] = useState(false);
-  const [snap, setSnap] = useState<Axis | null>(null);
+  const [closing, setClosing] = useState(false);
   const [spinning, setSpinning] = useState(true);
 
   // The cube grows out of the header logo and shrinks back into it. Measured
@@ -54,17 +59,17 @@ export default function CubeMode({ projects, teammates, allocations, weekStarts,
   // states into the final one and there is nothing to transition.
   useEffect(() => {
     const id = requestAnimationFrame(() => setCollapsed(false));
-    const t = setTimeout(() => setMounted(true), TRANSITION_MS);
-    return () => { cancelAnimationFrame(id); clearTimeout(t); };
+    return () => cancelAnimationFrame(id);
   }, []);
 
   const beginClose = useCallback(() => {
     setCollapsed(true);
-    setMounted(false);
+    setClosing(true);
+    onCollapse();
     // Let the shrink finish before unmounting — this also releases the WebGL
     // context, since the scene is unmounted rather than hidden.
-    setTimeout(onClose, TRANSITION_MS);
-  }, [onClose]);
+    setTimeout(onClose, CLOSE_MS);
+  }, [onCollapse, onClose]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -78,26 +83,27 @@ export default function CubeMode({ projects, teammates, allocations, weekStarts,
     <div
       className="fixed inset-0 z-30"
       style={{
-        transform: collapsed
-          ? `translate(${origin.dx}px, ${origin.dy}px) scale(0.02) rotate(-90deg)`
-          : "translate(0, 0) scale(1) rotate(0deg)",
+        // Translate only — deliberately no CSS scale. The canvas sizes itself
+        // from its bounding box, and a scale transform would have it measure
+        // the shrunken box and stay that resolution. The growing is done by the
+        // camera instead (see `closing` below), which lets the scene stay
+        // mounted throughout so the animation is actually visible.
+        transform: collapsed ? `translate(${origin.dx}px, ${origin.dy}px)` : "translate(0, 0)",
         opacity: collapsed ? 0 : 1,
-        transition: `transform ${TRANSITION_MS}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${TRANSITION_MS}ms ease`,
+        transition: closing
+          // Fade out ahead of the travel so it is gone before it lands, rather
+          // than shrinking into the corner in full view.
+          ? `transform ${CLOSE_MS}ms ease-in, opacity ${CLOSE_MS * 0.6}ms ease-in`
+          : `transform ${OPEN_MS}ms cubic-bezier(0.16, 1, 0.3, 1), opacity ${OPEN_MS}ms ease`,
       }}
     >
-      {/* Mounted only once the grow finishes: the canvas sizes itself from its
-          bounding box, which is still scaled to 2% mid-transition. */}
-      {mounted && (
-        <CubeScene
-          data={data}
-          snap={snap}
-          onSnap={(axis) => { setSpinning(false); setSnap(axis); }}
-          onSnapDone={() => setSnap(null)}
-          spinning={spinning}
-          onInteract={() => { setSpinning(false); setSnap(null); }}
-          onBackgroundClick={beginClose}
-        />
-      )}
+      <CubeScene
+        data={data}
+        spinning={spinning}
+        closing={closing}
+        onInteract={() => setSpinning(false)}
+        onBackgroundClick={beginClose}
+      />
     </div>
   );
 

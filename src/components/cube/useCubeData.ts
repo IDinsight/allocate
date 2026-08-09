@@ -10,7 +10,9 @@ import { getCurrentMonday } from "@/lib/dateUtils";
 // re-derives what it needs from the flat arrays already in page.tsx state —
 // the same thing AllocationView/TotalsCell do.
 
-const WEEK_WINDOW = 26; // weeks on the time axis, centred on this week
+// How much of the timeline the cube covers, relative to the current week.
+const MONTHS_BACK = 4;
+const MONTHS_AHEAD = 2;
 
 export type Voxel = {
   /** index on the project axis */
@@ -38,17 +40,20 @@ function shortWeekLabel(weekStart: string): string {
   return `${d.getDate()} ${d.toLocaleString("en", { month: "short" })}`;
 }
 
-/** Pick WEEK_WINDOW weeks centred on the current Monday, clamped to what exists. */
+/** Weeks from MONTHS_BACK before the current Monday to MONTHS_AHEAD after it. */
 function windowWeeks(weekStarts: string[]): string[] {
-  const sorted = [...new Set(weekStarts)].sort();
-  if (sorted.length <= WEEK_WINDOW) return sorted;
-  const today = getCurrentMonday();
-  // First week at or after today; -1 if every week is in the past.
-  let pivot = sorted.findIndex((w) => w >= today);
-  if (pivot < 0) pivot = sorted.length - 1;
-  let start = pivot - Math.floor(WEEK_WINDOW / 2);
-  start = Math.max(0, Math.min(start, sorted.length - WEEK_WINDOW));
-  return sorted.slice(start, start + WEEK_WINDOW);
+  const anchor = new Date(getCurrentMonday() + "T12:00:00");
+  const shifted = (months: number) => {
+    const d = new Date(anchor);
+    d.setMonth(d.getMonth() + months);
+    // Compare as YYYY-MM-DD strings, which sort chronologically.
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+  };
+  const from = shifted(-MONTHS_BACK);
+  const to = shifted(MONTHS_AHEAD);
+  return [...new Set(weekStarts)].filter((w) => w >= from && w <= to).sort();
 }
 
 export default function useCubeData(

@@ -224,20 +224,24 @@ html, body {
 
 /* Header easter-egg cube icon. Each axis turns at its own rate and none of the
    periods divide evenly, so the tumble never visibly repeats. */
+/* Starts and ends on the resting corner-on orientation — one full turn added to
+   each axis — so hovering picks the cube up from where it already sits instead
+   of snapping to a face first, and the loop closes seamlessly. */
 @keyframes cube-icon-tumble {
-  0%   { transform: rotateX(0deg)   rotateY(0deg)   rotateZ(0deg); }
-  25%  { transform: rotateX(90deg)  rotateY(140deg) rotateZ(50deg); }
-  50%  { transform: rotateX(200deg) rotateY(230deg) rotateZ(160deg); }
-  75%  { transform: rotateX(280deg) rotateY(310deg) rotateZ(280deg); }
-  100% { transform: rotateX(360deg) rotateY(360deg) rotateZ(360deg); }
+  from { transform: rotateX(-35.264deg) rotateY(-45deg) rotateZ(0deg); }
+  to   { transform: rotateX(324.736deg) rotateY(315deg) rotateZ(360deg); }
 }
 
-.cube-icon-spin {
-  animation: cube-icon-tumble 11s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+/* At rest the logo is still, viewed straight down a corner: rotating 45° about
+   Y then atan(1/√2) ≈ 35.264° about X puts the body diagonal along the line of
+   sight, so the silhouette is a regular hexagon. Only tumbles on hover. */
+.cube-icon {
+  transform: rotateX(-35.264deg) rotateY(-45deg);
 }
 
-.cube-trigger:hover .cube-icon-spin {
-  animation-duration: 2s;
+.cube-trigger:hover .cube-icon {
+  /* Linear so the loop has no visible stutter where it wraps. */
+  animation: cube-icon-tumble 2.4s linear infinite;
 }
 
 .cell-editable {
