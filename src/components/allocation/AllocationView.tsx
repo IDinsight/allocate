@@ -24,7 +24,24 @@ export type AllocationFilters = {
   teammateRole: Set<string>;
 };
 
-function defaultFilters(): AllocationFilters {
+// Exported so the cube can filter by exactly the same rules the grid uses,
+// rather than keeping a second copy that drifts.
+export function matchesProjectFilters(p: Project, filters: AllocationFilters): boolean {
+  if (filters.projectStatus.size > 0 && !filters.projectStatus.has(p.status)) return false;
+  if (filters.projectLeadId.size > 0 && !filters.projectLeadId.has(p.leadId ?? "")) return false;
+  if (filters.projectName && !p.name.toLowerCase().includes(filters.projectName.toLowerCase())) return false;
+  return true;
+}
+
+export function matchesTeammateFilters(t: Teammate, filters: AllocationFilters): boolean {
+  if (filters.teammateStatus.size > 0 && !filters.teammateStatus.has(t.status)) return false;
+  if (filters.teammateId.size > 0 && !filters.teammateId.has(t.id)) return false;
+  if (filters.teammateLevel.size > 0 && !filters.teammateLevel.has(t.level ?? "")) return false;
+  if (filters.teammateRole.size > 0 && !filters.teammateRole.has(t.role ?? "")) return false;
+  return true;
+}
+
+export function defaultFilters(): AllocationFilters {
   return {
     projectStatus: new Set(),
     projectLeadId: new Set(),
@@ -145,6 +162,8 @@ interface Props {
   allocations: Allocation[];
   weekStarts: string[];
   activeView: "project" | "teammate";
+  /** Reports the active filters upward so the cube can show the same slice. */
+  onFiltersChange?: (filters: AllocationFilters) => void;
   onCellEdit: (
     projectId: string,
     teammateId: string,
@@ -160,6 +179,7 @@ export default function AllocationView({
   allocations,
   weekStarts: rawWeekStarts,
   activeView,
+  onFiltersChange,
   onCellEdit,
 }: Props) {
   const weekStarts = useMemo(() => {
@@ -179,7 +199,8 @@ export default function AllocationView({
 
   useEffect(() => {
     writeFiltersToUrl(filters);
-  }, [filters]);
+    onFiltersChange?.(filters);
+  }, [filters, onFiltersChange]);
 
   // Lazy init view options from URL once on mount (mirrors filters above).
   const [viewOptionsInit] = useState<ViewOptions>(() =>
@@ -276,14 +297,10 @@ export default function AllocationView({
   }, [allocations]);
 
   // Filter projects matching active filters (includes projects with no allocations)
-  const activeProjects = useMemo(() => {
-    return projects.filter((p) => {
-      if (filters.projectStatus.size > 0 && !filters.projectStatus.has(p.status)) return false;
-      if (filters.projectLeadId.size > 0 && !filters.projectLeadId.has(p.leadId ?? "")) return false;
-      if (filters.projectName && !p.name.toLowerCase().includes(filters.projectName.toLowerCase())) return false;
-      return true;
-    });
-  }, [projects, filters]);
+  const activeProjects = useMemo(
+    () => projects.filter((p) => matchesProjectFilters(p, filters)),
+    [projects, filters]
+  );
 
   // Filter to teammates that have allocations + match active filters
   const activeTeammates = useMemo(() => {
@@ -291,14 +308,9 @@ export default function AllocationView({
     for (const a of allocations) {
       if (!a.isHidden) teammatesWithAllocations.add(a.teammateId);
     }
-    return teammates.filter((t) => {
-      if (!teammatesWithAllocations.has(t.id)) return false;
-      if (filters.teammateStatus.size > 0 && !filters.teammateStatus.has(t.status)) return false;
-      if (filters.teammateId.size > 0 && !filters.teammateId.has(t.id)) return false;
-      if (filters.teammateLevel.size > 0 && !filters.teammateLevel.has(t.level ?? "")) return false;
-      if (filters.teammateRole.size > 0 && !filters.teammateRole.has(t.role ?? "")) return false;
-      return true;
-    });
+    return teammates.filter(
+      (t) => teammatesWithAllocations.has(t.id) && matchesTeammateFilters(t, filters)
+    );
   }, [teammates, allocations, filters]);
 
   const leftPanelWidth = activeView === "project"

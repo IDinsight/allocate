@@ -5,6 +5,11 @@ import type { Project } from "@/components/ProjectsSidebar";
 import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
 import { getCurrentMonday } from "@/lib/dateUtils";
+import {
+  matchesProjectFilters,
+  matchesTeammateFilters,
+  type AllocationFilters,
+} from "@/components/allocation/AllocationView";
 
 // The grouped/summed shapes in src/lib/queries.ts are server-only, so the cube
 // re-derives what it needs from the flat arrays already in page.tsx state —
@@ -32,7 +37,6 @@ export type CubeData = {
   dims: { x: number; y: number; z: number };
 };
 
-const LIVE_PROJECT_STATUSES = new Set(["Active", "Upcoming"]);
 
 function shortWeekLabel(weekStart: string): string {
   // weekStart is a plain YYYY-MM-DD Monday; parse as local noon to dodge TZ drift.
@@ -60,17 +64,30 @@ export default function useCubeData(
   projects: Project[],
   teammates: Teammate[],
   allocations: Allocation[],
-  weekStarts: string[]
+  weekStarts: string[],
+  filters: AllocationFilters
 ): CubeData {
   return useMemo(() => {
     const weeks = windowWeeks(weekStarts);
     const weekIndex = new Map(weeks.map((w, i) => [w, i]));
 
+    // An axis entry only earns its slice if something lands on it inside the
+    // window — otherwise the cube fills with empty planes for archived projects
+    // and teammates who are not booked. This replaces an earlier hardcoded
+    // status rule, which would have fought an explicit status filter.
+    const seenProjects = new Set<string>();
+    const seenTeammates = new Set<string>();
+    for (const a of allocations) {
+      if (a.isHidden || a.fraction <= 0 || !weekIndex.has(a.weekStart)) continue;
+      seenProjects.add(a.projectId);
+      seenTeammates.add(a.teammateId);
+    }
+
     const liveProjects = projects
-      .filter((p) => LIVE_PROJECT_STATUSES.has(p.status))
+      .filter((p) => seenProjects.has(p.id) && matchesProjectFilters(p, filters))
       .sort((a, b) => a.name.localeCompare(b.name));
     const activeTeammates = teammates
-      .filter((t) => t.status === "Active")
+      .filter((t) => seenTeammates.has(t.id) && matchesTeammateFilters(t, filters))
       .sort((a, b) => (a.role ?? "zz").localeCompare(b.role ?? "zz") || a.name.localeCompare(b.name));
 
     const projectIndex = new Map(liveProjects.map((p, i) => [p.id, i]));
@@ -93,5 +110,5 @@ export default function useCubeData(
       weekLabels: weeks.map(shortWeekLabel),
       dims: { x: liveProjects.length, y: activeTeammates.length, z: weeks.length },
     };
-  }, [projects, teammates, allocations, weekStarts]);
+  }, [projects, teammates, allocations, weekStarts, filters]);
 }

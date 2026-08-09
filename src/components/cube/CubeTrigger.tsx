@@ -15,8 +15,8 @@ import SpinningCubeIcon from "./SpinningCubeIcon";
  * occupies 80–530px in from the right edge along the bottom.
  */
 const TRIGGER_POSITION: React.CSSProperties = {
-  bottom: 24,
-  right: 24,
+  bottom: 10,
+  right: 10,
 };
 
 export default function CubeTrigger({

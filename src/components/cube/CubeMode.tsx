@@ -3,11 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
+import { RotateCw, X } from "lucide-react";
 import type { Project } from "@/components/ProjectsSidebar";
 import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
 import Loader from "@/components/Loader";
 import useCubeData from "./useCubeData";
+import type { AllocationFilters } from "@/components/allocation/AllocationView";
 
 // three.js is ~150KB gzipped — keep it out of the main bundle and off the
 // server (WebGL has no SSR story).
@@ -30,18 +32,22 @@ type Props = {
   teammates: Teammate[];
   allocations: Allocation[];
   weekStarts: string[];
+  filters: AllocationFilters;
   /** Fired when the shrink starts, so the header logo can fade back in with it. */
   onCollapse: () => void;
   onClose: () => void;
 };
 
 export default function CubeMode({
-  projects, teammates, allocations, weekStarts, onCollapse, onClose,
+  projects, teammates, allocations, weekStarts, filters, onCollapse, onClose,
 }: Props) {
-  const data = useCubeData(projects, teammates, allocations, weekStarts);
+  const data = useCubeData(projects, teammates, allocations, weekStarts, filters);
   const [collapsed, setCollapsed] = useState(true);
   const [closing, setClosing] = useState(false);
   const [spinning, setSpinning] = useState(true);
+  // Face the camera is flying to, if any, and a counter the rotate button bumps.
+  const [facing, setFacing] = useState<[number, number, number] | null>(null);
+  const [rollTicks, setRollTicks] = useState(0);
 
   // The cube grows out of the header logo and shrinks back into it. Measured
   // rather than hard-coded, so it still lands on the button if the header moves.
@@ -101,9 +107,32 @@ export default function CubeMode({
         data={data}
         spinning={spinning}
         closing={closing}
-        onInteract={() => setSpinning(false)}
+        facing={facing}
+        rollTicks={rollTicks}
+        onFacePick={(normal) => { setSpinning(false); setFacing(normal); }}
+        onFaceArrived={() => setFacing(null)}
+        onInteract={() => { setSpinning(false); setFacing(null); }}
         onBackgroundClick={beginClose}
       />
+
+      <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 items-center gap-2">
+        <button
+          onClick={() => { setSpinning(false); setRollTicks((n) => n + 1); }}
+          aria-label="Rotate the view clockwise"
+          title="Rotate clockwise"
+          className="btn-chunky flex h-9 w-9 items-center justify-center rounded-md bg-white text-zinc-800"
+        >
+          <RotateCw size={16} strokeWidth={3} />
+        </button>
+        <button
+          onClick={beginClose}
+          aria-label="Close cube mode"
+          title="Close"
+          className="btn-chunky flex h-9 w-9 items-center justify-center rounded-md bg-white text-zinc-800"
+        >
+          <X size={16} strokeWidth={3} />
+        </button>
+      </div>
     </div>
   );
 

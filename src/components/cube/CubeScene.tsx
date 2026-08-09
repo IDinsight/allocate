@@ -7,23 +7,96 @@ import * as THREE from "three";
 import type { CubeData } from "./useCubeData";
 import { AXIS_COLORS, type Axis } from "./axisColors";
 
+// ---------------------------------------------------------------- geometry
+
 // Every axis is drawn to the same span, so the lattice always reads as a cube
 // no matter how lopsided the project/teammate/week counts are.
 const SPAN = 10;
 /** Half-width of the border box. Flush with the lattice: cells fill exactly
  *  SPAN, so the border traces the cube's real boundary with no offset. */
 const EDGE = SPAN / 2;
+/** The four parallel edges of any axis, as ±1 sign pairs for the other two. */
+const EDGE_CORNERS: [number, number][] = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+const AXES: Axis[] = ["project", "teammate", "time"];
+
+// ------------------------------------------------------------------- looks
+
 /** Border thickness in pixels. Raw GL lines are stuck at 1px on most platforms,
  *  so the border is drawn as mesh geometry (drei's Line) to honour this. */
 const BORDER_WIDTH = 3;
 /** Degrees the project/teammate name tags slant down from horizontal. */
 const NAME_SLANT = 30;
+/** How far outside the border the tick labels sit. */
+const LABEL_PAD = 0.3;
+const VOXEL_COLOR = new THREE.Color("#a78bfa"); // light purple, uniform for now
+const WHITE = new THREE.Color("#ffffff");
+
+// ------------------------------------------------------------------ camera
+
 /** Resting camera zoom, and the near-nothing it grows from and shrinks back to. */
 const BASE_ZOOM = 46;
 const COLLAPSED_ZOOM = BASE_ZOOM * 0;
+/** How far the camera sits from the middle when squared up to a face. */
+const FACE_VIEW_DIST = 40;
+/** Radians per second the view rolls when the rotate button is pressed. */
+const ROLL_SPEED = Math.PI * 1.6;
 
-const VOXEL_COLOR = new THREE.Color("#a78bfa"); // light purple, uniform for now
-const WHITE = new THREE.Color("#ffffff");
+// ------------------------------------------------------- label layout: when
+
+/** Seconds the camera must sit still before the labels re-lay themselves out. */
+const SETTLE_SECONDS = 0;
+/** While the camera keeps moving, re-lay out only after this much rotation. */
+const RESTEP_RADIANS = (18 * Math.PI) / 180;
+/** ...or after the zoom changes by this fraction. */
+const RESTEP_ZOOM = 0.2;
+/**
+ * The cube must project to at least this many pixels corner to corner before
+ * the labels are placed. The camera starts at almost no zoom for the grow-out
+ * animation, where the projection is degenerate — every tick lands on the same
+ * point, so edges cannot be scored and the tick spacing rounds to nonsense.
+ */
+const MIN_LAYOUT_SPAN_PX = 40;
+
+// ------------------------------------------------------- label layout: what
+
+/** An axis pointing near-straight at the camera collapses to a point — hide it. */
+const FACE_ON = 0.985;
+/** How far back past FACE_ON a hidden axis must come before it reappears. */
+const FACE_ON_RELEASE = 0.004;
+/**
+ * Screen room one tick needs, in pixels. An axis seen near edge-on squeezes all
+ * of its ticks into a few pixels, so the thinning has to come from the projected
+ * spacing rather than a fixed count.
+ */
+const LABEL_PITCH_PX = 18;
+
+// Each per-axis choice needs a deadband, or it flickers wherever two options
+// are momentarily tied. These are the widths of those bands.
+
+/** Fractional margin by which one screen run must beat the other to flip an
+ *  axis between horizontal and vertical treatment. */
+const ORIENTATION_HYSTERESIS = 0.15;
+/** How much slack must open up before a thinned-out axis shows more labels. */
+const STRIDE_RELEASE = 0.25;
+/**
+ * How much better a rival edge must look before the ticks jump to it. Without
+ * it the swap happens the instant two edges draw level, so a nudge either way
+ * makes the ticks flip sides.
+ *
+ * Units are normalised device coords, where the viewport spans -1..1 — so this
+ * is "the rival must be this much further left/down, as a fraction of half the
+ * screen":
+ *
+ *   0.00  flips the moment they draw level (twitchy)
+ *   0.05  ~2.5% of the viewport
+ *   0.40  very sticky; ticks can sit well past the near corner
+ *
+ * Tune to taste. Above ~0.8 an edge may never give up its ticks at all.
+ */
+const EDGE_FLIP_THRESHOLD = 0;
+
+/** Placeholder until the first real layout lands; see Layout.ready. */
+const INITIAL_PLACEMENT: Placement = { a: -1, b: -1, horizontal: true, stride: 1 };
 
 /** Width of one cell on an axis holding `count` entries. Every axis fills the
  *  same SPAN, so the lattice is always a true cube. */
@@ -103,13 +176,7 @@ function Voxels({ data }: { data: CubeData }) {
   if (voxels.length === 0) return null;
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, voxels.length]}
-      // Keeps the lattice in the raycaster's interaction list, so a click that
-      // lands on a cell is not treated as clicking away.
-      onClick={(e: ThreeEvent<MouseEvent>) => e.stopPropagation()}
-    >
+    <instancedMesh ref={meshRef} args={[undefined, undefined, voxels.length]}>
       <boxGeometry args={[1, 1, 1]} />
       <meshBasicMaterial
         transparent
@@ -132,9 +199,6 @@ function framePoint(axis: Axis, a: number, b: number, v: number, pad = 0): [numb
       : [a * p, b * p, v];
 }
 
-/** The four parallel edges of any axis, as ±1 sign pairs for the other two. */
-const EDGE_CORNERS: [number, number][] = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
-
 type Placement = {
   /** Signs of the two other axes, picking which of the four parallel edges carries the ticks. */
   a: number;
@@ -148,57 +212,9 @@ type Placement = {
 type Layout = {
   placement: Record<Axis, Placement>;
   hidden: Axis | null;
+  /** False until a layout has been computed against a usable projection. */
+  ready: boolean;
 };
-
-/** An axis pointing near-straight at the camera collapses to a point — hide it. */
-const FACE_ON = 0.985;
-/** How far back past FACE_ON a hidden axis must come before it reappears. */
-const FACE_ON_RELEASE = 0.004;
-
-/**
- * Every per-frame choice below needs a deadband, or it flickers wherever two
- * options are momentarily tied. These are the widths of those bands.
- */
-/** Fractional margin by which one screen run must beat the other to flip an
- *  axis between horizontal and vertical treatment. */
-const ORIENTATION_HYSTERESIS = 0.15;
-/** How much slack must open up before a thinned-out axis shows more labels. */
-const STRIDE_RELEASE = 0.25;
-
-/**
- * Screen room one tick needs, in pixels. An axis seen near edge-on squeezes all
- * of its ticks into a few pixels, so the thinning has to come from the projected
- * spacing rather than a fixed count.
- */
-const LABEL_PITCH_PX = 18;
-
-/**
- * How much better a rival edge must look before the ticks jump to it. Without
- * it the swap happens the instant two edges draw level, so a nudge either way
- * makes the ticks flip sides.
- *
- * Units are normalised device coords, where the viewport spans -1..1 — so this
- * is "the rival must be this much further left/down, as a fraction of half the
- * screen":
- *
- *   0.00  flips the moment they draw level (twitchy)
- *   0.05  ~2.5% of the viewport  — current
- *   0.40  very sticky; ticks can sit well past the near corner
- *
- * Tune to taste. Above ~0.8 an edge may never give up its ticks at all.
- */
-const EDGE_FLIP_THRESHOLD = 0;
-
-const AXES: Axis[] = ["project", "teammate", "time"];
-
-const INITIAL_PLACEMENT: Placement = { a: -1, b: -1, horizontal: true, stride: 1 };
-
-/** Seconds the camera must sit still before the labels re-lay themselves out. */
-const SETTLE_SECONDS = 0.05;
-/** While the camera keeps moving, re-lay out only after this much rotation. */
-const RESTEP_RADIANS = (18 * Math.PI) / 180;
-/** ...or after the zoom changes by this fraction. */
-const RESTEP_ZOOM = 0.2;
 
 /**
  * Chooses, per axis, which edge carries the tick labels: an axis reading
@@ -220,6 +236,7 @@ function useAxisLayout(dims: CubeData["dims"]): Layout {
   const [layout, setLayout] = useState<Layout>({
     placement: { project: INITIAL_PLACEMENT, teammate: INITIAL_PLACEMENT, time: INITIAL_PLACEMENT },
     hidden: null,
+    ready: false,
   });
   const ref = useRef(layout);
   const scratch = useRef(new THREE.Vector3()).current;
@@ -268,6 +285,13 @@ function useAxisLayout(dims: CubeData["dims"]): Layout {
       return { x: (scratch.x * size.width) / 2, y: (scratch.y * size.height) / 2 };
     };
 
+    // Nothing can be decided from a degenerate projection, and a half-computed
+    // answer is what makes the labels flash onto the wrong edges on open.
+    const near = screen([-EDGE, -EDGE, -EDGE]);
+    const far = screen([EDGE, EDGE, EDGE]);
+    const spanPx = Math.hypot(far.x - near.x, far.y - near.y);
+    if (!Number.isFinite(spanPx) || spanPx < MIN_LAYOUT_SPAN_PX) return;
+
     const count: Record<Axis, number> = { project: dims.x, teammate: dims.y, time: dims.z };
     const placement = {} as Record<Axis, Placement>;
 
@@ -313,16 +337,17 @@ function useAxisLayout(dims: CubeData["dims"]): Layout {
       if (n0 > 1) {
         const p0 = screen(framePoint(axis, a, b, axisPosition(0, n0)));
         const p1 = screen(framePoint(axis, a, b, axisPosition(1, n0)));
-        const gap = Math.max(Math.hypot(p1.x - p0.x, p1.y - p0.y), 0.001);
-        // Expressed as "does the current stride still fit?" rather than by
-        // recomputing an ideal each frame. Recomputing oscillates: a gap parked
-        // on a stride boundary rounds up, then immediately qualifies to round
-        // back down, forever. Here the two tests can never both be true, so the
-        // stride can only settle.
-        if (gap * stride < LABEL_PITCH_PX) {
-          stride = Math.max(1, Math.ceil(LABEL_PITCH_PX / gap));
-        } else if (stride > 1 && gap * (stride - 1) > LABEL_PITCH_PX * (1 + STRIDE_RELEASE)) {
-          stride -= 1;
+        const gap = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        // Capped at the tick count: beyond that it is all the same one label,
+        // and an unbounded value takes an age to walk back down.
+        const ideal = Math.min(n0, Math.max(1, Math.ceil(LABEL_PITCH_PX / Math.max(gap, 0.001))));
+        // Thin out immediately when labels would touch. Go back the other way
+        // only once there is comfortably room, so a gap parked on a stride
+        // boundary cannot flip back and forth — but when it does go, it goes
+        // straight to the right value rather than creeping down one per frame.
+        if (ideal > stride) stride = ideal;
+        else if (ideal < stride && gap * ideal > LABEL_PITCH_PX * (1 + STRIDE_RELEASE)) {
+          stride = ideal;
         }
       } else {
         stride = 1;
@@ -331,12 +356,12 @@ function useAxisLayout(dims: CubeData["dims"]): Layout {
       placement[axis] = { a, b, horizontal, stride };
     }
 
-    const changed = hidden !== cur.hidden || AXES.some((axis) => {
+    const changed = !cur.ready || hidden !== cur.hidden || AXES.some((axis) => {
       const p = placement[axis], q = cur.placement[axis];
       return p.a !== q.a || p.b !== q.b || p.horizontal !== q.horizontal || p.stride !== q.stride;
     });
     if (changed) {
-      const next = { placement, hidden };
+      const next = { placement, hidden, ready: true };
       ref.current = next;
       setLayout(next);
     }
@@ -373,10 +398,85 @@ function IntroZoom({ closing }: { closing: boolean }) {
   return null;
 }
 
+/** An invisible box the size of the lattice, so a tap can be attributed to a
+ *  face. Front-facing, so it is hit before anything inside it. */
+function FacePicker({ onPick }: { onPick: (normal: [number, number, number]) => void }) {
+  return (
+    <mesh
+      onClick={(e: ThreeEvent<MouseEvent>) => {
+        e.stopPropagation();
+        const n = e.face?.normal;
+        // The box is never rotated, so its local normals are already world ones.
+        if (n) onPick([n.x, n.y, n.z]);
+      }}
+    >
+      <boxGeometry args={[SPAN, SPAN, SPAN]} />
+      <meshBasicMaterial colorWrite={false} depthWrite={false} transparent opacity={0} />
+    </mesh>
+  );
+}
+
+/**
+ * Squares the camera up to a tapped face, and rolls the view on request.
+ *
+ * Writing camera.position and camera.up directly is safe: OrbitControls derives
+ * its spherical coordinates from the camera's current state on every update, so
+ * it picks these moves up rather than fighting them.
+ */
+function CameraRig({
+  facing,
+  rollTicks,
+  onArrived,
+}: {
+  facing: [number, number, number] | null;
+  rollTicks: number;
+  onArrived: () => void;
+}) {
+  const target = useRef(new THREE.Vector3());
+  const pendingRoll = useRef(0);
+  const lastTicks = useRef(rollTicks);
+
+  useEffect(() => {
+    if (!facing) return;
+    target.current.set(...facing).multiplyScalar(FACE_VIEW_DIST);
+  }, [facing]);
+
+  useFrame(({ camera }, delta) => {
+    if (rollTicks !== lastTicks.current) {
+      pendingRoll.current += (rollTicks - lastTicks.current) * (Math.PI / 2);
+      lastTicks.current = rollTicks;
+    }
+
+    if (pendingRoll.current > 1e-4) {
+      const step = Math.min(pendingRoll.current, delta * ROLL_SPEED);
+      // Turning `up` anticlockwise about the view axis turns the picture
+      // clockwise — the camera and its image rotate opposite ways.
+      camera.up.applyAxisAngle(camera.position.clone().normalize(), step);
+      pendingRoll.current -= step;
+      camera.lookAt(0, 0, 0);
+    }
+
+    if (!facing) return;
+    // Square-on to a face leaves the roll undefined, and an `up` parallel to the
+    // view sends lookAt to NaN — so give the vertical faces their own up.
+    if (Math.abs(camera.up.dot(target.current.clone().normalize())) > 0.99) {
+      camera.up.set(0, 0, -1);
+    }
+    camera.position.lerp(target.current, 1 - Math.exp(-8 * delta));
+    camera.lookAt(0, 0, 0);
+    if (camera.position.distanceTo(target.current) < 0.05) {
+      camera.position.copy(target.current);
+      onArrived();
+    }
+  });
+
+  return null;
+}
+
 /** The coloured border on all twelve edges, plus a tick label per row/column. */
 function AxisFurniture({ data }: { data: CubeData }) {
   const { projectNames, teammateNames, weekLabels, dims } = data;
-  const { placement, hidden } = useAxisLayout(dims);
+  const { placement, hidden, ready } = useAxisLayout(dims);
 
   // Fixed geometry — only the ticks move with the camera.
   const border = useMemo(
@@ -391,7 +491,6 @@ function AxisFurniture({ data }: { data: CubeData }) {
     []
   );
 
-  const LABEL_PAD = 0.3; // clear of the border without dragging it outward
   const names: Record<Axis, string[]> = {
     project: projectNames,
     teammate: teammateNames,
@@ -432,7 +531,7 @@ function AxisFurniture({ data }: { data: CubeData }) {
       {/* Flat zIndexRange on purpose: drei otherwise interpolates z-index by
           camera distance, so two overlapping labels trade places every time
           their depth order crosses, which reads as a flicker. */}
-      {tags.map((t) => (
+      {ready && tags.map((t) => (
         <Html key={t.key} position={t.pos} zIndexRange={[10, 10]}>
           {/* Horizontal axes run along the bottom, so labels start at the tick
               and slant down away from the cube. Vertical axes run down the left,
@@ -459,12 +558,20 @@ export default function CubeScene({
   data,
   spinning,
   closing,
+  facing,
+  rollTicks,
+  onFacePick,
+  onFaceArrived,
   onInteract,
   onBackgroundClick,
 }: {
   data: CubeData;
   spinning: boolean;
   closing: boolean;
+  facing: [number, number, number] | null;
+  rollTicks: number;
+  onFacePick: (normal: [number, number, number]) => void;
+  onFaceArrived: () => void;
   onInteract: () => void;
   onBackgroundClick: () => void;
 }) {
@@ -498,11 +605,15 @@ export default function CubeScene({
         <Backdrop />
         <Voxels data={data} />
         <AxisFurniture data={data} />
+        {/* Guarded by the same drag test as closing: a rotate ends in a click,
+            which would otherwise snap to whichever face it finished over. */}
+        <FacePicker onPick={(n) => { if (!dragged.current) onFacePick(n); }} />
         <IntroZoom closing={closing} />
+        <CameraRig facing={facing} rollTicks={rollTicks} onArrived={onFaceArrived} />
         <OrbitControls
           onStart={onInteract}
           enablePan={false}
-          autoRotate={spinning}
+          autoRotate={spinning && !facing}
           autoRotateSpeed={0.7}
           // Must not exceed COLLAPSED_ZOOM: OrbitControls clamps camera.zoom
           // into this range on every update, which would otherwise snap the
