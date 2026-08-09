@@ -222,6 +222,28 @@ html, body {
   transition: background-color 0.6s ease, opacity 0.6s ease;
 }
 
+/* Header easter-egg cube icon. Each axis turns at its own rate and none of the
+   periods divide evenly, so the tumble never visibly repeats. */
+/* Starts and ends on the resting corner-on orientation — one full turn added to
+   each axis — so hovering picks the cube up from where it already sits instead
+   of snapping to a face first, and the loop closes seamlessly. */
+@keyframes cube-icon-tumble {
+  from { transform: rotateX(-35.264deg) rotateY(-45deg) rotateZ(0deg); }
+  to   { transform: rotateX(324.736deg) rotateY(315deg) rotateZ(360deg); }
+}
+
+/* At rest the logo is still, viewed straight down a corner: rotating 45° about
+   Y then atan(1/√2) ≈ 35.264° about X puts the body diagonal along the line of
+   sight, so the silhouette is a regular hexagon. Only tumbles on hover. */
+.cube-icon {
+  transform: rotateX(-35.264deg) rotateY(-45deg);
+}
+
+.cube-trigger:hover .cube-icon {
+  /* Linear so the loop has no visible stutter where it wraps. */
+  animation: cube-icon-tumble 2.4s linear infinite;
+}
+
 .cell-editable {
   cursor: text;
   border-radius: 4px;

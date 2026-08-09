@@ -6,7 +6,9 @@ and teammate tables, a shared notepad, and a read-only JSON API for agents and
 scripts.
 
 Built with Next.js 16 (App Router), React 19, Tailwind 4, Prisma 7 against
-Postgres, and Better Auth for Google sign-in.
+Postgres, and Better Auth for Google sign-in. three.js and React Three Fiber are
+there only for the cube easter egg behind the logo in the bottom-right corner,
+and are lazy-loaded so they stay out of the main bundle.
 
 ## Setup
 

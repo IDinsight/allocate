@@ -6,7 +6,7 @@ import ProjectsSidebar from "@/components/ProjectsSidebar";
 import TeammatesSidebar from "@/components/TeammatesSidebar";
 import WatermarkBackground from "@/components/WatermarkBackground";
 import Notepad from "@/components/Notepad";
-import AllocationView from "@/components/allocation/AllocationView";
+import AllocationView, { defaultFilters, type AllocationFilters } from "@/components/allocation/AllocationView";
 import type { Project } from "@/components/ProjectsSidebar";
 import type { Teammate } from "@/components/TeammatesSidebar";
 import type { Allocation } from "@/components/allocation/ProjectSection";
@@ -14,12 +14,18 @@ import { trackWrite, hasPendingWrites, isBusy, getWriteGeneration } from "@/lib/
 import usePolling from "@/hooks/usePolling";
 import { AccessProvider, useCanEdit } from "@/lib/access";
 import Loader from "@/components/Loader";
+import CubeTrigger from "@/components/cube/CubeTrigger";
+import CubeMode from "@/components/cube/CubeMode";
 import { signOut } from "@/lib/authClient";
 
 function HomeInner() {
   const canEdit = useCanEdit();
   const [projectsOpen, setProjectsOpen] = useState(false);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
+  const [cubeOpen, setCubeOpen] = useState(false);
+  const [logoHidden, setLogoHidden] = useState(false);
+  // Mirrored up from AllocationView so the cube shows the same filtered slice.
+  const [filters, setFilters] = useState<AllocationFilters>(defaultFilters);
   // useSearchParams (vs window.location) returns the same value on server
   // and client during SSR, so lazy-init from it doesn't cause a hydration
   // mismatch. Requires the Suspense boundary in layout.tsx.
@@ -290,6 +296,7 @@ function HomeInner() {
             allocations={allocations}
             weekStarts={weekStarts}
             activeView={activeView}
+            onFiltersChange={setFilters}
             onCellEdit={handleCellEdit}
           />
         )}
@@ -326,6 +333,28 @@ function HomeInner() {
       />
 
       {!dataLoading && !loadError && <Notepad />}
+
+      {/* Easter egg: the allocation data as a 3D lattice. Gated on loaded data
+          like the notepad — the cube renders straight from these arrays, so
+          offering it mid-load would just open an empty lattice. */}
+      {!dataLoading && !loadError && (
+        <CubeTrigger
+          hidden={logoHidden}
+          onOpen={() => { setCubeOpen(true); setLogoHidden(true); }}
+        />
+      )}
+
+      {cubeOpen && (
+        <CubeMode
+          projects={projects}
+          teammates={teammates}
+          allocations={allocations}
+          weekStarts={weekStarts}
+          filters={filters}
+          onCollapse={() => setLogoHidden(false)}
+          onClose={() => setCubeOpen(false)}
+        />
+      )}
     </div>
   );
 }
