@@ -57,7 +57,13 @@ function windowWeeks(weekStarts: string[]): string[] {
   };
   const from = shifted(-MONTHS_BACK);
   const to = shifted(MONTHS_AHEAD);
-  return [...new Set(weekStarts)].filter((w) => w >= from && w <= to).sort();
+  // Descending on purpose. The cube's +z runs right-to-left on screen from the
+  // resting camera, so laying the weeks out newest-first puts the earliest week
+  // at the left edge and time reads left to right.
+  return [...new Set(weekStarts)]
+    .filter((w) => w >= from && w <= to)
+    .sort()
+    .reverse();
 }
 
 export default function useCubeData(
