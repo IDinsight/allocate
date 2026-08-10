@@ -554,8 +554,11 @@ const spec = {
         tags: ["mcp"],
         summary: "MCP endpoint (streamable HTTP, JSON-RPC)",
         description:
-          "Model Context Protocol server exposing read-only tools: " +
-          "`list_projects`, `list_team_members`, and `get_allocations`. Not a " +
+          "Model Context Protocol server. Read-only tools: `list_projects`, " +
+          "`list_team_members`, `get_allocations`. Write tools, which cover " +
+          "the projects table only: `create_project`, `update_project` — " +
+          "these mirror the UI's permissions, so a caller whose access tier " +
+          "is `read` gets a tool error rather than a write. Not a " +
           "REST endpoint — connect with an MCP client, which authenticates " +
           "via OAuth 2.1 with PKCE and Dynamic Client Registration " +
           "(discovery under /.well-known/) and signs the user in through the " +

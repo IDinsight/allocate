@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { updateProject } from "@/lib/projectMutations";
 
 export async function PATCH(
   req: NextRequest,
@@ -7,21 +8,7 @@ export async function PATCH(
 ) {
   const { id } = await params;
   const body = await req.json();
-
-  const data: Record<string, unknown> = { ...body };
-  for (const key of ["startDate", "endDate"] as const) {
-    if (key in data) {
-      const v = data[key];
-      data[key] = typeof v === "string" && v ? new Date(`${v}T00:00:00Z`) : null;
-    }
-  }
-
-  const project = await prisma.project.update({
-    where: { id },
-    data,
-    include: { lead: { select: { id: true, name: true } } },
-  });
-  return NextResponse.json(project);
+  return NextResponse.json(await updateProject(id, body));
 }
 
 export async function DELETE(
