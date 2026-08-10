@@ -1,8 +1,9 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createMcpHandler } from "mcp-handler";
 import type { Implementation } from "@modelcontextprotocol/server";
 import { withMcpAuth } from "better-auth/plugins";
 import { z } from "zod";
-import { auth, resolveAccess } from "@/lib/auth";
+import { auth, resolveAccess, type Access } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   getGroupedAllocations,
@@ -10,13 +11,40 @@ import {
   listTeammates,
   resolveFilterIds,
 } from "@/lib/queries";
+import { createProject, updateProject } from "@/lib/projectMutations";
 
 // MCP endpoint (streamable HTTP). This route is the sanctioned exception to
 // "src/proxy.ts is the only enforcement boundary": the proxy passes /api/mcp
 // through untouched because requests carry OAuth bearer tokens, not session
 // cookies, and the spec requires unauthenticated requests to get a 401 with a
-// WWW-Authenticate header — which withMcpAuth below produces. Every tool here
-// must stay read-only; a write tool would need its own access-tier check.
+// WWW-Authenticate header — which withMcpAuth below produces. The proxy's
+// write block never runs here either, so every write tool must call
+// requireEdit() itself — see the project tools below.
+
+/**
+ * The caller's access tier, for the duration of one request.
+ *
+ * The handler is built once at module load, so a tool closure cannot capture
+ * per-request state — and a module-level variable would be a cross-request
+ * leak, since requests interleave. AsyncLocalStorage keeps each request's tier
+ * on its own async context, which the tool callbacks run inside.
+ */
+const callerAccess = new AsyncLocalStorage<Access>();
+
+/**
+ * Mirrors the UI exactly: `edit` means an email matching an Active teammate row
+ * (or an EXTRA_ALLOWED_EMAILS entry), resolved per request by the same
+ * resolveAccess the proxy uses, so revoking access takes effect at once rather
+ * than when the OAuth token expires. Returns an error result, not a throw, so
+ * the agent sees why it was refused.
+ */
+function requireEdit() {
+  if (callerAccess.getStore() === "edit") return null;
+  return toolError(
+    "Forbidden: this account has read-only access to Allocate. Only active " +
+      "IDinsight team members can change projects."
+  );
+}
 
 const DATE = z
   .string()
@@ -38,6 +66,101 @@ const rpcError = (message: string, status: number) =>
   );
 
 const readOnly = { readOnlyHint: true, destructiveHint: false };
+// Not destructive (nothing is removed) but not idempotent either: calling
+// create_project twice makes two projects.
+const writes = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+};
+
+// The editable fields, shared by create_project and update_project. Every one
+// is optional here; each tool adds its own required arguments on top. Nullable
+// throughout so an agent can clear a field it can also set — with the
+// exception of `name`, `status` and `billable`, which the column requires.
+const PROJECT_FIELDS = z.object({
+  pillar: z
+    .enum(["Products", "Services", "Advisory", "Admin"])
+    .nullable()
+    .optional()
+    .describe("Which pillar owns the project."),
+  region: z
+    .enum(["Global", "IND", "WNA", "ESA", "SEA"])
+    .nullable()
+    .optional()
+    .describe("Delivery region."),
+  billingRate: z
+    .enum(["Internal", "L1", "Fractional", "CoImpact", "Standard"])
+    .nullable()
+    .optional()
+    .describe("Rate card the project bills at."),
+  status: z
+    .enum(["Upcoming", "Active", "Paused", "Archived", "Completed"])
+    .optional()
+    .describe("Lifecycle status. New projects default to Upcoming."),
+  conversionProbability: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .nullable()
+    .optional()
+    .describe("For Upcoming work: percent chance it converts (0-100)."),
+  billable: z.boolean().optional().describe("Whether the project is billable."),
+  unit4Code: z.string().nullable().optional().describe("Unit4 finance code."),
+  startDate: DATE.nullable().optional().describe("Start date (YYYY-MM-DD)."),
+  endDate: DATE.nullable().optional().describe("End date (YYYY-MM-DD)."),
+  blurb: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Short free-text description."),
+  lead: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "Project lead — a teammate name (case-insensitive) or id. Null clears it."
+    ),
+});
+
+/** Turns the `lead` argument into the `leadId` the database wants. Absent means
+ *  "don't touch"; null means "clear"; anything else must resolve to a teammate. */
+async function resolveLead(
+  lead: string | null | undefined
+): Promise<{ leadId?: string | null } | { error: ReturnType<typeof toolError> }> {
+  if (lead === undefined) return {};
+  if (lead === null) return { leadId: null };
+
+  const { ids, unmatched } = await resolveFilterIds("teammate", [lead]);
+  if (unmatched.length > 0 || ids.length === 0) {
+    return {
+      error: toolError(
+        `No teammate matches "${lead}". Check the name against list_team_members.`
+      ),
+    };
+  }
+  return { leadId: ids[0] };
+}
+
+/** The one shape a project is described in, whether an agent just listed it or
+ *  just wrote it. */
+const projectView = (p: Awaited<ReturnType<typeof createProject>>) =>
+  compact({
+    id: p.id,
+    name: p.name,
+    status: p.status,
+    pillar: p.pillar,
+    region: p.region,
+    billingRate: p.billingRate,
+    billable: p.billable,
+    conversionProbability: p.conversionProbability,
+    unit4Code: p.unit4Code,
+    start: day(p.startDate),
+    end: day(p.endDate),
+    blurb: p.blurb,
+    lead: p.lead?.name,
+  });
 
 // Strip null/undefined so agents never wade through empty fields.
 const compact = (o: Record<string, unknown>) =>
@@ -61,7 +184,7 @@ const DEFAULT_FUTURE_WEEKS = 13;
 
 const serverInfo = {
   name: "allocate",
-  version: "2.0.0",
+  version: "2.1.0",
   title: "Allocate",
   description: "IDinsight's project staffing tracker.",
   ...(process.env.BETTER_AUTH_URL && {
@@ -89,31 +212,83 @@ const mcpHandler = createMcpHandler(
         title: "List projects",
         description:
           "List every project: name, status, pillar, region, billing rate, " +
-          "billable flag, start/end, blurb, and lead (a teammate name). " +
+          "billable flag, Unit4 code, start/end, blurb, and lead (a teammate " +
+          "name). Ids returned here are what update_project accepts. " +
           "Null fields are omitted. All statuses are included — filter " +
           "client-side. For staffing data use get_allocations, which accepts " +
           "these project names directly.",
         annotations: readOnly,
       },
-      async () =>
-        json(
-          (await listProjects()).map((p) =>
-            compact({
-              id: p.id,
-              name: p.name,
-              status: p.status,
-              pillar: p.pillar,
-              region: p.region,
-              billingRate: p.billingRate,
-              billable: p.billable,
-              conversionProbability: p.conversionProbability,
-              start: day(p.startDate),
-              end: day(p.endDate),
-              blurb: p.blurb,
-              lead: p.lead?.name,
-            })
-          )
-        )
+      async () => json((await listProjects()).map(projectView))
+    );
+
+    server.registerTool(
+      "create_project",
+      {
+        title: "Create project",
+        description:
+          "Create a new project. Only `name` is required; everything else " +
+          "defaults (status Upcoming, not billable). Requires an account with " +
+          "edit access — active IDinsight team members only. Names are not " +
+          "unique, so check list_projects first and confirm with the user " +
+          "before creating something that may already exist. Returns the " +
+          "created project, including its id.",
+        inputSchema: PROJECT_FIELDS.extend({
+          name: z.string().min(1).describe("Project name."),
+        }),
+        annotations: writes,
+      },
+      async (input) => {
+        const denied = requireEdit();
+        if (denied) return denied;
+
+        const { lead: leadTerm, ...fields } = input;
+        const lead = await resolveLead(leadTerm);
+        if ("error" in lead) return lead.error;
+
+        return json(projectView(await createProject({ ...fields, ...lead })));
+      }
+    );
+
+    server.registerTool(
+      "update_project",
+      {
+        title: "Update project",
+        description:
+          "Change fields on an existing project, identified by name " +
+          "(case-insensitive) or id. Only the fields you pass are touched; " +
+          "everything else is left alone. Pass null to clear an optional " +
+          "field. Requires an account with edit access — active IDinsight " +
+          "team members only. This edits shared team data, so confirm the " +
+          "change with the user before calling. Returns the updated project.",
+        inputSchema: PROJECT_FIELDS.extend({
+          project: z
+            .string()
+            .describe("Which project to change — its name or id."),
+          name: z.string().min(1).optional().describe("New project name."),
+        }),
+        annotations: writes,
+      },
+      async (input) => {
+        const denied = requireEdit();
+        if (denied) return denied;
+
+        const { project: target, lead: leadTerm, ...fields } = input;
+        const { ids, unmatched } = await resolveFilterIds("project", [target]);
+        if (unmatched.length > 0 || ids.length === 0) {
+          return toolError(
+            `No project matches "${target}". Check the name against ` +
+              "list_projects."
+          );
+        }
+
+        const lead = await resolveLead(leadTerm);
+        if ("error" in lead) return lead.error;
+
+        return json(
+          projectView(await updateProject(ids[0], { ...fields, ...lead }))
+        );
+      }
     );
 
     server.registerTool(
@@ -244,7 +419,13 @@ const mcpHandler = createMcpHandler(
   {
     serverInfo,
     instructions:
-      "Read-only access to Allocate, IDinsight's project staffing tracker. " +
+      "Access to Allocate, IDinsight's project staffing tracker. Staffing and " +
+      "team data are read-only; the project list can also be written, via " +
+      "create_project and update_project, and only by accounts with edit " +
+      "access (active IDinsight team members) — other callers get a clear " +
+      "error. Project writes change data the whole team sees, so confirm the " +
+      "specific change with the user before calling, and check list_projects " +
+      "first so you edit an existing project rather than duplicating it. " +
       "get_allocations returns pre-grouped, pre-summed data keyed by names — " +
       "no id resolution or arithmetic needed: each group's TOTAL row is the " +
       "per-week sum (100 = fully booked). Weeks are Mondays; a missing week " +
@@ -254,8 +435,8 @@ const mcpHandler = createMcpHandler(
   }
 );
 
-// The tools are read-only, so "read" and "edit" tiers are treated the same;
-// only "none" (access revoked after the token was issued) is rejected.
+// "none" (access revoked after the token was issued) is rejected outright;
+// "read" and "edit" both get in, and the write tools re-check for "edit".
 const handler = withMcpAuth(auth, async (req, session) => {
   const origin = req.headers.get("origin");
   const allowedOrigin = process.env.BETTER_AUTH_URL;
@@ -271,11 +452,14 @@ const handler = withMcpAuth(auth, async (req, session) => {
         select: { email: true },
       })
     : null;
-  if (!user || (await resolveAccess(user.email)) === "none") {
+  const access = user ? await resolveAccess(user.email) : "none";
+  if (access === "none") {
     return rpcError("Forbidden: account has no access", 403);
   }
 
-  return mcpHandler(req);
+  // Everything the handler does — including every tool callback — runs inside
+  // this context, which is how requireEdit() sees the caller's tier.
+  return callerAccess.run(access, () => mcpHandler(req));
 });
 
 export { handler as GET, handler as POST, handler as DELETE };

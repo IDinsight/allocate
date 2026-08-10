@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 // session, so adding someone to the teammates table upgrades them on their
 // next write instead of on their next sign-in.
 
-type Access = "edit" | "read" | "none";
+export type Access = "edit" | "read" | "none";
 
 const list = (v: string | undefined) =>
   (v ?? "")
