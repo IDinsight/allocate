@@ -38,6 +38,8 @@ const BASE_ZOOM = 46;
 const COLLAPSED_ZOOM = BASE_ZOOM * 0;
 /** How far the camera sits from the middle when squared up to a face. */
 const FACE_VIEW_DIST = 40;
+/** The screen-right direction that makes time read past-to-future. */
+const TIME_RIGHT = new THREE.Vector3(0, 0, -1);
 /** Radians per second the view rolls when the rotate button is pressed. */
 const ROLL_SPEED = Math.PI * 1.6;
 
@@ -433,12 +435,30 @@ function CameraRig({
   onArrived: () => void;
 }) {
   const target = useRef(new THREE.Vector3());
+  const targetUp = useRef(new THREE.Vector3(0, 1, 0));
   const pendingRoll = useRef(0);
   const lastTicks = useRef(rollTicks);
 
   useEffect(() => {
     if (!facing) return;
     target.current.set(...facing).multiplyScalar(FACE_VIEW_DIST);
+    // Free rotation leaves `up` wherever the drag (and any roll) left it, so a
+    // face view inherits that tilt and there is no way to straighten it. Every
+    // face therefore gets an explicit upright.
+    //
+    // Whenever the time axis is on screen it should run along the bottom, past
+    // on the left — which means screen-right must point down -z, since the weeks
+    // are laid out newest-first (see useCubeData). Right, forward and up are
+    // mutually perpendicular, so that pins `up` exactly: up = normal × right.
+    // On the two faces looking straight down the time axis there is no time to
+    // orient, so those keep world up.
+    const n = new THREE.Vector3(...facing);
+    const facesTime = Math.abs(n.z) > Math.abs(n.x) && Math.abs(n.z) > Math.abs(n.y);
+    targetUp.current.copy(
+      facesTime
+        ? new THREE.Vector3(0, 1, 0)
+        : new THREE.Vector3().crossVectors(n, TIME_RIGHT).normalize()
+    );
   }, [facing]);
 
   useFrame(({ camera }, delta) => {
@@ -457,15 +477,25 @@ function CameraRig({
     }
 
     if (!facing) return;
-    // Square-on to a face leaves the roll undefined, and an `up` parallel to the
-    // view sends lookAt to NaN — so give the vertical faces their own up.
-    if (Math.abs(camera.up.dot(target.current.clone().normalize())) > 0.99) {
-      camera.up.set(0, 0, -1);
+    const t = 1 - Math.exp(-8 * delta);
+    camera.position.lerp(target.current, t);
+    // An exactly upside-down `up` lerps through the zero vector, which
+    // normalizes to NaN — tip it off the axis first so it has a way round.
+    if (camera.up.dot(targetUp.current) < -0.999) {
+      const side = new THREE.Vector3()
+        .crossVectors(targetUp.current, target.current)
+        .normalize()
+        .multiplyScalar(0.02);
+      camera.up.add(side).normalize();
     }
-    camera.position.lerp(target.current, 1 - Math.exp(-8 * delta));
+    // Straighten alongside the move, so the view arrives square rather than
+    // keeping whatever tilt the last drag left behind.
+    camera.up.lerp(targetUp.current, t).normalize();
     camera.lookAt(0, 0, 0);
     if (camera.position.distanceTo(target.current) < 0.05) {
       camera.position.copy(target.current);
+      camera.up.copy(targetUp.current);
+      camera.lookAt(0, 0, 0);
       onArrived();
     }
   });
