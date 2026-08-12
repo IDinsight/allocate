@@ -124,7 +124,7 @@ export default function DateHeader({
     },
     {
       key: "teammateId",
-      label: "Team",
+      label: "Person",
       options: teammates
         .map((t) => ({ value: t.id, label: t.name }))
         .sort((a, b) => a.label.localeCompare(b.label)),
