@@ -34,9 +34,12 @@ interface Props {
   setProjects: Dispatch<SetStateAction<Project[]>>;
   teammates: Teammate[];
   disabled?: boolean;
+  /** Request from the parent to scroll to a specific project. `token` bumps
+   * on each request so re-focusing the same project retriggers the scroll. */
+  focusProject?: { id: string; token: number } | null;
 }
 
-export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, projects, setProjects, teammates, disabled }: Props) {
+export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, projects, setProjects, teammates, disabled, focusProject }: Props) {
   const canEdit = useCanEdit();
   const [closing, setClosing] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
@@ -213,6 +216,7 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
                 setFiltersActive(active);
                 setClearFilters(() => clearFn);
               }}
+              focusProject={focusProject}
             />
           </div>
         </div>

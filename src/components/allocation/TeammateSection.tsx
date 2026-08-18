@@ -38,6 +38,7 @@ interface Props {
   ) => void;
   onAddProject?: (teammateId: string, projectId: string) => void;
   onRemovePair?: (projectId: string, teammateId: string) => void;
+  onOpenProject?: (projectId: string) => void;
 }
 
 export default function TeammateSection({
@@ -57,6 +58,7 @@ export default function TeammateSection({
   onCellEdit,
   onAddProject,
   onRemovePair,
+  onOpenProject,
 }: Props) {
   const canEdit = useCanEdit();
   const [hovering, setHovering] = useState(false);
@@ -170,7 +172,17 @@ export default function TeammateSection({
                 }}
                 onMouseEnter={() => setHovering(true)}
               >
-                <span className="truncate">{project.name}</span>
+                {onOpenProject ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenProject(project.id)}
+                    className="truncate text-left hover:underline cursor-pointer"
+                  >
+                    {project.name}
+                  </button>
+                ) : (
+                  <span className="truncate">{project.name}</span>
+                )}
                 {isUnsaved && onRemovePair && (
                   <button
                     className="hidden group-hover/name:flex items-center justify-center ml-auto shrink-0 w-4 h-4 rounded text-zinc-500 hover:text-red-600 hover:bg-red-100"

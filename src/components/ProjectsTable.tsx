@@ -127,6 +127,9 @@ interface Props {
   onUpdate: (id: string, field: string, value: unknown) => void;
   onDelete: (id: string) => void;
   onFilterChange?: (active: boolean, clearFn: () => void) => void;
+  /** External request to scroll to a project. `token` bumps per request so the
+   * scroll effect re-runs when the same project is focused again. */
+  focusProject?: { id: string; token: number } | null;
 }
 
 export default function ProjectsTable({
@@ -135,10 +138,41 @@ export default function ProjectsTable({
   onUpdate,
   onDelete,
   onFilterChange,
+  focusProject,
 }: Props) {
   const newRowRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<ProjectFilters>({ ...EMPTY_FILTERS });
   const [openFilter, setOpenFilter] = useState<string | null>(null);
+
+  // Scroll to the focused project on request. If the current filters would
+  // hide it, clear filters first — the click is a jump-to-detail action, so
+  // the user's expectation is that the target actually appears.
+  useEffect(() => {
+    if (!focusProject) return;
+    const targetId = focusProject.id;
+    const target = projects.find((p) => p.id === targetId);
+    if (!target) return;
+    const passesCurrentFilters =
+      (filters.name === "" || target.name.toLowerCase().includes(filters.name.toLowerCase())) &&
+      (filters.pillar.size === 0 || filters.pillar.has(target.pillar ?? "")) &&
+      (filters.region.size === 0 || filters.region.has(target.region ?? "")) &&
+      (filters.billingRate.size === 0 || filters.billingRate.has(target.billingRate ?? "")) &&
+      (filters.status.size === 0 || filters.status.has(target.status)) &&
+      (filters.conversionProbability.size === 0 || filters.conversionProbability.has(String(target.conversionProbability ?? ""))) &&
+      (filters.billable.size === 0 || filters.billable.has(String(target.billable))) &&
+      (filters.unit4Code === "" || (target.unit4Code ?? "").toLowerCase().includes(filters.unit4Code.toLowerCase())) &&
+      (filters.blurb === "" || (target.blurb ?? "").toLowerCase().includes(filters.blurb.toLowerCase())) &&
+      (filters.leadId.size === 0 || filters.leadId.has(target.leadId ?? ""));
+    if (!passesCurrentFilters) setFilters({ ...EMPTY_FILTERS });
+    // Wait for the sidebar's slide-in animation (~250ms) to settle so the
+    // scroll container is at its final position when we scroll to the row.
+    const timeout = setTimeout(() => {
+      const row = document.querySelector<HTMLElement>(`[data-project-id="${CSS.escape(targetId)}"]`);
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 280);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusProject?.token]);
 
   const updateFilter = useCallback(
     <K extends keyof ProjectFilters>(key: K, value: ProjectFilters[K]) => {
@@ -357,6 +391,7 @@ function ProjectRow({
 
   return (
     <div
+      data-project-id={project.id}
       className={`grid grid-cols-[220px_120px_100px_80px_100px_100px_70px_70px_100px_110px_110px_150px_40px] transition-colors ${
         confirming
           ? "bg-rose-50"

@@ -52,6 +52,7 @@ interface Props {
   ) => void;
   onAddTeammate?: (projectId: string, teammateId: string) => void;
   onRemovePair?: (projectId: string, teammateId: string) => void;
+  onOpenProject?: (projectId: string) => void;
 }
 
 export default function ProjectSection({
@@ -73,6 +74,7 @@ export default function ProjectSection({
   onCellEdit,
   onAddTeammate,
   onRemovePair,
+  onOpenProject,
 }: Props) {
   const canEdit = useCanEdit();
   const [hovering, setHovering] = useState(false);
@@ -153,9 +155,19 @@ export default function ProjectSection({
         onMouseEnter={() => setHovering(true)}
       >
         <div className="flex flex-col gap-0.5">
-          <span className="font-bold text-md text-zinc-900 leading-tight">
-            {project.name}
-          </span>
+          {onOpenProject ? (
+            <button
+              type="button"
+              onClick={() => onOpenProject(project.id)}
+              className="self-start text-left font-bold text-md text-zinc-900 leading-tight hover:underline cursor-pointer"
+            >
+              {project.name}
+            </button>
+          ) : (
+            <span className="font-bold text-md text-zinc-900 leading-tight">
+              {project.name}
+            </span>
+          )}
           <span className="text-sm text-zinc-500 leading-tight">
             {[project.region, project.billingRate].filter(Boolean).join(", ")}
           </span>

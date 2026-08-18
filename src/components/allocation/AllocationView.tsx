@@ -198,6 +198,8 @@ interface Props {
     fraction: number | null,
     existingId: string | undefined
   ) => void;
+  /** Open the projects sidebar and scroll to this project. */
+  onOpenProject?: (projectId: string) => void;
 }
 
 export default function AllocationView({
@@ -208,6 +210,7 @@ export default function AllocationView({
   activeView,
   onFiltersChange,
   onCellEdit,
+  onOpenProject,
 }: Props) {
   const weekStarts = useMemo(() => {
     // Rolling three-year window: previous year, current year, next year.
@@ -415,6 +418,7 @@ export default function AllocationView({
                     return next;
                   });
                 }}
+                onOpenProject={onOpenProject}
               />
             ))}
           </div>
@@ -469,6 +473,7 @@ export default function AllocationView({
                     return next;
                   });
                 }}
+                onOpenProject={onOpenProject}
               />
             ))}
           </div>

@@ -21,7 +21,17 @@ import { signOut } from "@/lib/authClient";
 function HomeInner() {
   const canEdit = useCanEdit();
   const [projectsOpen, setProjectsOpen] = useState(false);
+  // Focus request for the projects sidebar. `token` increments on each click
+  // so re-focusing the same project retriggers the scroll effect inside the
+  // sidebar rather than becoming a no-op state update.
+  const [projectFocus, setProjectFocus] = useState<{ id: string; token: number } | null>(null);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
+
+  const handleOpenProject = useCallback((projectId: string) => {
+    setTeammatesOpen(false);
+    setProjectsOpen(true);
+    setProjectFocus((prev) => ({ id: projectId, token: (prev?.token ?? 0) + 1 }));
+  }, []);
   const [cubeOpen, setCubeOpen] = useState(false);
   const [logoHidden, setLogoHidden] = useState(false);
   // Mirrored up from AllocationView so the cube shows the same filtered slice.
@@ -298,6 +308,7 @@ function HomeInner() {
             activeView={activeView}
             onFiltersChange={setFilters}
             onCellEdit={handleCellEdit}
+            onOpenProject={handleOpenProject}
           />
         )}
       </main>
@@ -319,6 +330,7 @@ function HomeInner() {
         setProjects={setProjects}
         teammates={teammates}
         disabled={dataLoading || loadError}
+        focusProject={projectFocus}
       />
 
       {/* Teammates sidebar + handle (right) */}
