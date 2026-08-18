@@ -3,8 +3,14 @@ import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 const DRAG_THRESHOLD = 4;
 const EMPTY_MAP = new Map<number, number | null>();
 
-// Paint roller cursor as inline SVG data URI
-const PAINT_ROLLER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23333' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='3' width='16' height='5' rx='1'/%3E%3Cpath d='M18 5h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-8'/%3E%3Cpath d='M12 10v5'/%3E%3Cpath d='M10 15h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z'/%3E%3C/svg%3E") 12 12, crosshair`;
+// How close (px) to the scroll container's inner edge before auto-scroll kicks in.
+const AUTOSCROLL_EDGE = 40;
+// Max px per animation frame to scroll when the mouse pins the edge.
+const AUTOSCROLL_MAX_STEP = 20;
+
+// Applied to <body> while a drag is active so the paint-roller cursor wins over
+// per-cell `cursor: pointer` rules. Paired with a global CSS rule in globals.css.
+const DRAG_BODY_CLASS = "drag-filling";
 
 interface DragState {
   sourceIndex: number;
@@ -18,6 +24,7 @@ interface Pending {
   sourceIndex: number;
   sourceFraction: number | null;
   rowKey: string;
+  rowEl: HTMLElement;
 }
 
 interface UseDragToFillParams {
@@ -29,6 +36,11 @@ export default function useDragToFill({ weekStarts, cellWidth }: UseDragToFillPa
   const [dragState, setDragState] = useState<DragState | null>(null);
   const pendingRef = useRef<Pending | null>(null);
   const justDraggedRef = useRef(false);
+  // Latest mouse position (viewport coords). Updated by both the row's
+  // onMouseMove and a window-level mousemove during drag, so auto-scroll can
+  // reproject to the correct cell even when the mouse leaves the row.
+  const mousePosRef = useRef<{ x: number; y: number } | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const previewMap = useMemo(() => {
     if (!dragState) return EMPTY_MAP;
@@ -54,29 +66,42 @@ export default function useDragToFill({ weekStarts, cellWidth }: UseDragToFillPa
       sourceIndex: cellIndex,
       sourceFraction: fraction ?? null,
       rowKey,
+      rowEl: e.currentTarget as HTMLElement,
     };
   }, []);
+
+  // Recompute currentIndex from the last known mouse position against the row's
+  // current bounding rect. Used by both onMouseMove and the auto-scroll RAF
+  // loop — when the container scrolls under a stationary mouse, the row's
+  // rect shifts, so the target cell changes even though the cursor didn't.
+  const projectMouseToIndex = useCallback((rowEl: HTMLElement): number | null => {
+    const pos = mousePosRef.current;
+    if (!pos) return null;
+    const rect = rowEl.getBoundingClientRect();
+    const relativeX = pos.x - rect.left;
+    return Math.max(0, Math.min(
+      weekStarts.length - 1,
+      Math.floor(relativeX / cellWidth),
+    ));
+  }, [weekStarts.length, cellWidth]);
 
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     const pending = pendingRef.current;
     if (!pending) return;
 
+    mousePosRef.current = { x: e.clientX, y: e.clientY };
     const dx = Math.abs(e.clientX - pending.startX);
-
     if (!dragState && dx < DRAG_THRESHOLD) return;
 
     // Activate or update drag
     e.preventDefault();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const relativeX = e.clientX - rect.left;
-    const currentIndex = Math.max(0, Math.min(
-      weekStarts.length - 1,
-      Math.floor(relativeX / cellWidth),
-    ));
+    const currentIndex = projectMouseToIndex(pending.rowEl);
+    if (currentIndex == null) return;
 
-    // Set cursor on first activation
+    // Add drag class on first activation so the paint-roller cursor overrides
+    // per-cell cursor styles via the global rule in globals.css.
     if (!dragState) {
-      document.body.style.cursor = PAINT_ROLLER_CURSOR;
+      document.body.classList.add(DRAG_BODY_CLASS);
     }
 
     setDragState({
@@ -85,12 +110,17 @@ export default function useDragToFill({ weekStarts, cellWidth }: UseDragToFillPa
       currentIndex,
       rowKey: pending.rowKey,
     });
-  }, [weekStarts.length, cellWidth, dragState]);
+  }, [projectMouseToIndex, dragState]);
 
   const resetDrag = useCallback(() => {
     pendingRef.current = null;
+    mousePosRef.current = null;
     setDragState(null);
-    document.body.style.cursor = "";
+    document.body.classList.remove(DRAG_BODY_CLASS);
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
   }, []);
 
   // Returns fills if drag was active, null otherwise
@@ -120,17 +150,86 @@ export default function useDragToFill({ weekStarts, cellWidth }: UseDragToFillPa
     }
   }, []);
 
-  // Handle mouseup outside the container
+  // Handle mouseup outside the container. Always installed so a mousedown
+  // that never crossed the drag threshold still gets cleared.
   useEffect(() => {
-    if (!dragState && !pendingRef.current) return;
-
     const handleWindowMouseUp = () => {
-      resetDrag();
+      if (pendingRef.current || rafRef.current != null) resetDrag();
     };
-
     window.addEventListener("mouseup", handleWindowMouseUp);
     return () => window.removeEventListener("mouseup", handleWindowMouseUp);
-  }, [dragState, resetDrag]);
+  }, [resetDrag]);
+
+  // While a drag is active: track the mouse globally (so we still know its
+  // position when it leaves the row) and run an auto-scroll loop that pushes
+  // the scroll container when the mouse is near an edge. Each frame we also
+  // reproject the mouse onto the row so the preview keeps advancing while the
+  // container scrolls under a stationary cursor.
+  //
+  // Depend only on the boolean — we don't want the loop torn down and rebuilt
+  // every frame as currentIndex updates.
+  const isDragging = !!dragState;
+  useEffect(() => {
+    if (!isDragging) return;
+    const pending = pendingRef.current;
+    if (!pending) return;
+    const rowEl = pending.rowEl;
+    const scrollEl = rowEl.closest("[data-alloc-scroll]") as HTMLElement | null;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      mousePosRef.current = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+    };
+    window.addEventListener("mousemove", handleWindowMouseMove);
+
+    const tick = () => {
+      const pos = mousePosRef.current;
+      if (pos && scrollEl) {
+        const rect = scrollEl.getBoundingClientRect();
+        const leftPanelWidth = parseInt(
+          scrollEl.getAttribute("data-alloc-left-width") ?? "0",
+        );
+        // Cells start after the sticky left panel; treat that as the visible left edge.
+        const visibleLeft = rect.left + leftPanelWidth;
+        let dx = 0;
+        let dy = 0;
+        if (pos.x < visibleLeft + AUTOSCROLL_EDGE) {
+          const dist = Math.max(0, visibleLeft + AUTOSCROLL_EDGE - pos.x);
+          dx = -Math.min(AUTOSCROLL_MAX_STEP, dist);
+        } else if (pos.x > rect.right - AUTOSCROLL_EDGE) {
+          const dist = Math.max(0, pos.x - (rect.right - AUTOSCROLL_EDGE));
+          dx = Math.min(AUTOSCROLL_MAX_STEP, dist);
+        }
+        if (pos.y < rect.top + AUTOSCROLL_EDGE) {
+          const dist = Math.max(0, rect.top + AUTOSCROLL_EDGE - pos.y);
+          dy = -Math.min(AUTOSCROLL_MAX_STEP, dist);
+        } else if (pos.y > rect.bottom - AUTOSCROLL_EDGE) {
+          const dist = Math.max(0, pos.y - (rect.bottom - AUTOSCROLL_EDGE));
+          dy = Math.min(AUTOSCROLL_MAX_STEP, dist);
+        }
+        if (dx !== 0) scrollEl.scrollLeft += dx;
+        if (dy !== 0) scrollEl.scrollTop += dy;
+      }
+
+      // Reproject each frame — required when the mouse is stationary at an
+      // edge and only the container is scrolling.
+      const idx = projectMouseToIndex(rowEl);
+      if (idx != null) {
+        setDragState((prev) => (prev && prev.currentIndex !== idx ? { ...prev, currentIndex: idx } : prev));
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [isDragging, projectMouseToIndex]);
 
   return {
     previewMap,
