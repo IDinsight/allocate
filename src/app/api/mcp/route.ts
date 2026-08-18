@@ -80,7 +80,7 @@ const writes = {
 // exception of `name`, `status` and `billable`, which the column requires.
 const PROJECT_FIELDS = z.object({
   pillar: z
-    .enum(["Products", "Services", "Advisory", "Admin"])
+    .enum(["Products", "Services", "Advisory", "Internal", "Admin"])
     .nullable()
     .optional()
     .describe("Which pillar owns the project."),

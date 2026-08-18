@@ -78,6 +78,7 @@ const PILLAR_OPTIONS = [
   { value: "Products", label: "Products" },
   { value: "Services", label: "Services" },
   { value: "Advisory", label: "Advisory" },
+  { value: "Internal", label: "Internal" },
   { value: "Admin", label: "Admin" },
 ];
 

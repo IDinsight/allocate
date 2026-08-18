@@ -691,7 +691,7 @@ const spec = {
       TeammateStatus: { type: "string", enum: ["Active", "Alumni"] },
       Pillar: {
         type: "string",
-        enum: ["Products", "Services", "Advisory", "Admin"],
+        enum: ["Products", "Services", "Advisory", "Internal", "Admin"],
       },
       BillingRate: {
         type: "string",
