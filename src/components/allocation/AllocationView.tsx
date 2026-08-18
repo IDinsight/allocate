@@ -329,7 +329,7 @@ export default function AllocationView({
   }, [weekStarts, scrollToCurrentMonth]);
 
   return (
-    <div className="flex flex-col h-full w-full max-w-6xl mx-auto px-12">
+    <div className="flex flex-col h-full w-full max-w-[1600px] mx-auto px-18">
       {/* Scroll container */}
       <div ref={scrollRef} data-alloc-scroll data-alloc-left-width={leftPanelWidth} className="flex-1 overflow-auto mb-10 border-t-4 border-2 border-zinc-900  bg-white">
         {activeView === "project" && (
