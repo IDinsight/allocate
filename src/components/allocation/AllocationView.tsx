@@ -41,20 +41,30 @@ export function matchesTeammateFilters(t: Teammate, filters: AllocationFilters):
   return true;
 }
 
+// Filters that come pre-populated on a fresh visit. The values here match
+// the URL contract: a missing key falls back to these, an `all` sentinel
+// means the user explicitly cleared the filter, and any other value
+// overrides. Non-defaulted filters (leadId, teammateId, roles, etc.) still
+// start empty.
+const DEFAULT_PROJECT_STATUS = ["Upcoming", "Active"] as const;
+const DEFAULT_TEAMMATE_STATUS = ["Active"] as const;
+
 export function defaultFilters(): AllocationFilters {
   return {
-    projectStatus: new Set(),
+    projectStatus: new Set(DEFAULT_PROJECT_STATUS),
     projectLeadId: new Set(),
     projectName: "",
-    teammateStatus: new Set(),
+    teammateStatus: new Set(DEFAULT_TEAMMATE_STATUS),
     teammateId: new Set(),
     teammateRole: new Set(),
     teammateLevel: new Set(),
   };
 }
 
-// Filter <-> URL serialization. Defaults are all empty, so a missing key
-// unambiguously means "no filter" — no sentinel needed.
+// Filter <-> URL serialization. Two of these have real defaults, so we use
+// an `all` sentinel to distinguish "user cleared" from "missing → default".
+// The rest default to empty; a missing key still unambiguously means "no
+// filter" for them.
 const FILTER_PARAM_KEYS = [
   "projectStatus",
   "projectLead",
@@ -65,17 +75,29 @@ const FILTER_PARAM_KEYS = [
   "teamRole",
 ] as const;
 
+function setsEqual(a: Set<string>, b: readonly string[]): boolean {
+  if (a.size !== b.length) return false;
+  for (const x of b) if (!a.has(x)) return false;
+  return true;
+}
+
 function parseFiltersFromSearch(search: string): AllocationFilters {
   const params = new URLSearchParams(search);
   const setFromParam = (key: string) => {
     const v = params.get(key);
     return new Set(v ? v.split(",").filter(Boolean) : []);
   };
+  const setFromDefaultedParam = (key: string, defaults: readonly string[]) => {
+    if (!params.has(key)) return new Set<string>(defaults);
+    const v = params.get(key);
+    if (v === "all") return new Set<string>();
+    return new Set(v ? v.split(",").filter(Boolean) : []);
+  };
   return {
-    projectStatus: setFromParam("projectStatus"),
+    projectStatus: setFromDefaultedParam("projectStatus", DEFAULT_PROJECT_STATUS),
     projectLeadId: setFromParam("projectLead"),
     projectName: params.get("projectName") ?? "",
-    teammateStatus: setFromParam("teamStatus"),
+    teammateStatus: setFromDefaultedParam("teamStatus", DEFAULT_TEAMMATE_STATUS),
     teammateId: setFromParam("team"),
     teammateLevel: setFromParam("teamLevel"),
     teammateRole: setFromParam("teamRole"),
@@ -89,9 +111,14 @@ function writeFiltersToUrl(filters: AllocationFilters) {
   const setParam = (key: string, s: Set<string>) => {
     if (s.size > 0) params.set(key, Array.from(s).join(","));
   };
-  setParam("projectStatus", filters.projectStatus);
+  const setDefaultedParam = (key: string, s: Set<string>, defaults: readonly string[]) => {
+    if (setsEqual(s, defaults)) return; // Same as default — omit for a clean URL.
+    if (s.size === 0) { params.set(key, "all"); return; } // Explicitly cleared.
+    params.set(key, Array.from(s).join(","));
+  };
+  setDefaultedParam("projectStatus", filters.projectStatus, DEFAULT_PROJECT_STATUS);
   setParam("projectLead", filters.projectLeadId);
-  setParam("teamStatus", filters.teammateStatus);
+  setDefaultedParam("teamStatus", filters.teammateStatus, DEFAULT_TEAMMATE_STATUS);
   setParam("team", filters.teammateId);
   setParam("teamLevel", filters.teammateLevel);
   setParam("teamRole", filters.teammateRole);
