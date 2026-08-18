@@ -210,7 +210,14 @@ export default function AllocationView({
   onCellEdit,
 }: Props) {
   const weekStarts = useMemo(() => {
-    const yearWeeks = generateWeekStarts(getYearStartMonday(), 52);
+    // Rolling three-year window: previous year, current year, next year.
+    const currentYear = new Date().getFullYear();
+    const start = getYearStartMonday(currentYear - 1);
+    const [sy, sm, sd] = start.split("-").map(Number);
+    const startMs = new Date(sy, sm - 1, sd).getTime();
+    const endMs = new Date(currentYear + 2, 0, 1).getTime();
+    const weeks = Math.ceil((endMs - startMs) / (7 * 86400000));
+    const yearWeeks = generateWeekStarts(start, weeks);
     const merged = new Set<string>(yearWeeks);
     for (const ws of rawWeekStarts) merged.add(ws);
     return Array.from(merged).sort();
