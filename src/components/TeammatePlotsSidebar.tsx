@@ -167,7 +167,7 @@ export default function TeammatePlotsSidebar({ open, onClose, onOpen, onFlushed,
           <button
             onClick={onOpen}
             disabled={disabled}
-            className={`sidebar-tab sidebar-tab-right group bg-white/100 text-violet-700 ${disabled ? "opacity-30 pointer-events-none" : ""}`}
+            className={`sidebar-tab sidebar-tab-right group bg-white/100 text-green-700 ${disabled ? "opacity-30 pointer-events-none" : ""}`}
           >
             <span className="px-1.5">
               {"‹"}
@@ -206,7 +206,7 @@ export default function TeammatePlotsSidebar({ open, onClose, onOpen, onFlushed,
           <div className="absolute left-2 top-1/2 -translate-y-1/2 -translate-x-full z-[51]">
             <button
               onClick={handleClose}
-              className="sidebar-tab sidebar-tab-right bg-white/100 text-violet-700"
+              className="sidebar-tab sidebar-tab-right bg-white/100 text-green-700"
             >
               <span className="px-1.5">
                 {"›"}
