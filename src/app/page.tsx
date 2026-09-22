@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import ProjectsSidebar from "@/components/ProjectsSidebar";
 import ProjectPlotsSidebar from "@/components/ProjectsPlotsSidebar";
 import TeammatesSidebar from "@/components/TeammatesSidebar";
+import TeammatePlotsSidebar from "@/components/TeammatePlotsSidebar";
 import WatermarkBackground from "@/components/WatermarkBackground";
 import Notepad from "@/components/Notepad";
 import AllocationView, { defaultFilters, type AllocationFilters } from "@/components/allocation/AllocationView";
@@ -28,6 +29,7 @@ function HomeInner() {
   // sidebar rather than becoming a no-op state update.
   const [projectFocus, setProjectFocus] = useState<{ id: string; token: number } | null>(null);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
+  const [teammatePlotsOpen, setTeammatePlotsOpen] = useState(false);
 
   const handleOpenProject = useCallback((projectId: string) => {
     setTeammatesOpen(false);
@@ -351,14 +353,28 @@ function HomeInner() {
       />
 
       {/* Teammates sidebar + handle (right) */}
+      <TeammatePlotsSidebar
+        open={teammatePlotsOpen}
+        onClose={() => setTeammatePlotsOpen(false)}
+        onFlushed={() => fetchAll(true)}
+        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setTeammatePlotsOpen(true); }}
+        projects={projects}
+        allocations={allocations}
+        teammates={teammates}
+        weekStarts={weekStarts}
+        disabled={dataLoading || loadError}
+        siblingOpen={teammatesOpen}
+      />
+
       <TeammatesSidebar
         open={teammatesOpen}
         onClose={() => setTeammatesOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setProjectsOpen(false); setTeammatesOpen(true); }}
+        onOpen={() => { setProjectsOpen(false); setTeammatePlotsOpen(false); setTeammatesOpen(true); }}
         teammates={teammates}
         setTeammates={setTeammates}
         disabled={dataLoading || loadError}
+        siblingOpen={teammatePlotsOpen}
       />
 
       {!dataLoading && !loadError && <Notepad />}

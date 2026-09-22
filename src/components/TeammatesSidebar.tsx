@@ -24,9 +24,12 @@ interface Props {
   teammates: Teammate[];
   setTeammates: Dispatch<SetStateAction<Teammate[]>>;
   disabled?: boolean;
+  /** Whether the sibling TeammatePlotsSidebar panel is currently open — hides
+   * this sidebar's closed-state tab so it doesn't float above that panel. */
+  siblingOpen?: boolean;
 }
 
-export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, teammates, setTeammates, disabled }: Props) {
+export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, teammates, setTeammates, disabled, siblingOpen }: Props) {
   const canEdit = useCanEdit();
   const [closing, setClosing] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
@@ -117,7 +120,7 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
   return (
     <>
       {/* Handle — when sidebar is closed */}
-      {!open && (
+      {!open && !siblingOpen && (
         <div className="fixed -right-0.5 top-2/3 -translate-y-1/2 z-[51]">
           <button
             onClick={onOpen}

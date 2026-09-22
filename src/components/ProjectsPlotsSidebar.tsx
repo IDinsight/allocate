@@ -1,5 +1,5 @@
 "use client";
-import { Dispatch, SetStateAction, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import WatermarkBackground from "./WatermarkBackground";
 import foalyPng from "@/../public/foaly.png";
 import { groupWeeksByMonth } from "@/lib/dateUtils";
@@ -132,7 +132,7 @@ export default function ProjectsPlotsSidebar({ open, onClose, onOpen, onFlushed,
             disabled={disabled}
             className={`sidebar-tab group bg-white/100 text-violet-700 ${disabled ? "opacity-30 pointer-events-none" : ""}`}
           >
-            <span className="px-2.5 transition-all w-0 overflow-hidden whitespace-nowrap group-hover:w-18 group-hover:px-2">
+            <span className="pr-2.5 pl-0.5 text-xl transition-all w-0 overflow-hidden whitespace-nowrap group-hover:w-18 group-hover:px-2">
               🩺
             </span>
             <span className="px-1.5">
@@ -158,12 +158,12 @@ export default function ProjectsPlotsSidebar({ open, onClose, onOpen, onFlushed,
           <WatermarkBackground 
           text="" 
           imageSrc={foalyPng.src}
-          imgTileWidth={foalyPng.width}
-          imgTileHeight={foalyPng.height}
+          imgTileWidth={foalyPng.width * .5}
+          imgTileHeight={foalyPng.height * .5}
           className="-z-10" 
           color="purple" 
           opacity={0.3} 
-          rotation={-20}/>
+          rotation={-26}/>
 
           {/* Handle — attached to right edge of panel */}
           <div className="absolute right-2 top-1/2 -translate-y-1/2 translate-x-full z-[51]">
@@ -171,7 +171,7 @@ export default function ProjectsPlotsSidebar({ open, onClose, onOpen, onFlushed,
               onClick={handleClose}
               className="sidebar-tab bg-white/100 text-violet-700"
             >
-              <span className="pl-3 pr-1 whitespace-nowrap">
+              <span className="pl-3 pr-1 text-xl whitespace-nowrap">
                 🩺
               </span>
               <span className="px-1.5">
