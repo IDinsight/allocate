@@ -38,9 +38,12 @@ interface Props {
   /** Request from the parent to scroll to a specific project. `token` bumps
    * on each request so re-focusing the same project retriggers the scroll. */
   focusProject?: { id: string; token: number } | null;
+  /** Whether the sibling ProjectPlotsSidebar panel is currently open — hides
+   * this sidebar's closed-state tab so it doesn't float above that panel. */
+  siblingOpen?: boolean;
 }
 
-export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, projects, setProjects, teammates, disabled, focusProject }: Props) {
+export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, projects, setProjects, teammates, disabled, focusProject, siblingOpen }: Props) {
   const canEdit = useCanEdit();
   const [closing, setClosing] = useState(false);
   const [filtersActive, setFiltersActive] = useState(false);
@@ -140,7 +143,7 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
   return (
     <>
       {/* Handle — when sidebar is closed */}
-      {!open && (
+      {!open && !siblingOpen && (
         <div className="fixed -left-0.5 top-1/3 -translate-y-1/2 z-[51]">
           <button
             onClick={onOpen}

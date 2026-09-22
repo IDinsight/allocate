@@ -46,6 +46,7 @@ enum Pillar {
   Advisory
   Internal
   Admin
+  Government
 }
 
 enum BillingRate {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProjectsSidebar from "@/components/ProjectsSidebar";
+import ProjectPlotsSidebar from "@/components/ProjectsPlotsSidebar";
 import TeammatesSidebar from "@/components/TeammatesSidebar";
 import WatermarkBackground from "@/components/WatermarkBackground";
 import Notepad from "@/components/Notepad";
@@ -21,6 +22,7 @@ import { signOut } from "@/lib/authClient";
 function HomeInner() {
   const canEdit = useCanEdit();
   const [projectsOpen, setProjectsOpen] = useState(false);
+  const [projectPlotsOpen, setProjectPlotsOpen] = useState(false);
   // Focus request for the projects sidebar. `token` increments on each click
   // so re-focusing the same project retriggers the scroll effect inside the
   // sidebar rather than becoming a no-op state update.
@@ -29,6 +31,7 @@ function HomeInner() {
 
   const handleOpenProject = useCallback((projectId: string) => {
     setTeammatesOpen(false);
+    setProjectPlotsOpen(false);
     setProjectsOpen(true);
     setProjectFocus((prev) => ({ id: projectId, token: (prev?.token ?? 0) + 1 }));
   }, []);
@@ -325,12 +328,26 @@ function HomeInner() {
         open={projectsOpen}
         onClose={() => setProjectsOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(true); }}
+        onOpen={() => { setTeammatesOpen(false); setProjectPlotsOpen(false); setProjectsOpen(true); }}
         projects={projects}
         setProjects={setProjects}
         teammates={teammates}
         disabled={dataLoading || loadError}
         focusProject={projectFocus}
+        siblingOpen={projectPlotsOpen}
+      />
+
+      {/* Project plots sidebar + handle (left) */}
+      <ProjectPlotsSidebar
+        open={projectPlotsOpen}
+        onClose={() => setProjectPlotsOpen(false)}
+        onFlushed={() => fetchAll(true)}
+        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setProjectPlotsOpen(true); }}
+        projects={projects}
+        allocations={allocations}
+        weekStarts={weekStarts}
+        disabled={dataLoading || loadError}
+        siblingOpen={projectsOpen}
       />
 
       {/* Teammates sidebar + handle (right) */}

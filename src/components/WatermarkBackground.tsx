@@ -2,6 +2,9 @@ import { useId } from "react";
 
 interface Props {
   text: string;
+  imageSrc?: string;
+  imgTileWidth?: number;
+  imgTileHeight?: number;
   rotation?: number;
   fontSize?: number;
   opacity?: number;
@@ -16,6 +19,9 @@ interface Props {
  */
 export default function WatermarkBackground({
   text,
+  imageSrc,
+  imgTileWidth,
+  imgTileHeight,
   rotation = -45,
   fontSize = 16,
   opacity = 0.04,
@@ -38,22 +44,26 @@ export default function WatermarkBackground({
           id={patternId}
           x="0"
           y="0"
-          width={tileWidth}
-          height={tileHeight}
+          width={imgTileWidth ?? tileWidth}
+          height={imgTileHeight ?? tileHeight}
           patternUnits="userSpaceOnUse"
           patternTransform={`rotate(${rotation})`}
         >
-          <text
-            x="0"
-            y={baseline}
-            fontFamily="system-ui, sans-serif"
-            fontSize={fontSize}
-            fontWeight="700"
-            fill={color}
-            fillOpacity={opacity}
-          >
-            {text}
-          </text>
+          {imageSrc ? (
+            <image href={imageSrc} x="0" y="0" width={imgTileWidth ?? tileWidth} height={imgTileHeight ?? tileHeight} opacity={opacity} preserveAspectRatio="xMidYMid slice"/>
+          ) : (
+            <text
+              x="0"
+              y={baseline}
+              fontFamily="system-ui, sans-serif"
+              fontSize={fontSize}
+              fontWeight="700"
+              fill={color}
+              fillOpacity={opacity}
+            >
+              {text}
+            </text>
+          )}
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`} />
