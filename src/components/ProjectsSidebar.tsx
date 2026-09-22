@@ -12,6 +12,7 @@ export type Project = {
   id: string;
   name: string;
   pillar: string | null;
+  focusArea: string | null;
   region: string | null;
   billingRate: string | null;
   status: string;
@@ -111,6 +112,7 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
       id: tempId,
       name: "",
       pillar: null,
+      focusArea: null,
       region: null,
       billingRate: null,
       status: "Upcoming",
