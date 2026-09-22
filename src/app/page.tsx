@@ -34,6 +34,7 @@ function HomeInner() {
   const handleOpenProject = useCallback((projectId: string) => {
     setTeammatesOpen(false);
     setProjectPlotsOpen(false);
+    setTeammatePlotsOpen(false);
     setProjectsOpen(true);
     setProjectFocus((prev) => ({ id: projectId, token: (prev?.token ?? 0) + 1 }));
   }, []);
@@ -330,7 +331,7 @@ function HomeInner() {
         open={projectsOpen}
         onClose={() => setProjectsOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectPlotsOpen(false); setProjectsOpen(true); }}
+        onOpen={() => { setTeammatesOpen(false); setProjectPlotsOpen(false); setTeammatePlotsOpen(false); setProjectsOpen(true); }}
         projects={projects}
         setProjects={setProjects}
         teammates={teammates}
@@ -344,7 +345,7 @@ function HomeInner() {
         open={projectPlotsOpen}
         onClose={() => setProjectPlotsOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setProjectPlotsOpen(true); }}
+        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setTeammatePlotsOpen(false); setProjectPlotsOpen(true); }}
         projects={projects}
         allocations={allocations}
         weekStarts={weekStarts}
@@ -357,7 +358,7 @@ function HomeInner() {
         open={teammatePlotsOpen}
         onClose={() => setTeammatePlotsOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setTeammatePlotsOpen(true); }}
+        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setProjectPlotsOpen(false); setTeammatePlotsOpen(true); }}
         projects={projects}
         allocations={allocations}
         teammates={teammates}
@@ -370,7 +371,7 @@ function HomeInner() {
         open={teammatesOpen}
         onClose={() => setTeammatesOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setProjectsOpen(false); setTeammatePlotsOpen(false); setTeammatesOpen(true); }}
+        onOpen={() => { setProjectsOpen(false); setProjectPlotsOpen(false); setTeammatePlotsOpen(false); setTeammatesOpen(true); }}
         teammates={teammates}
         setTeammates={setTeammates}
         disabled={dataLoading || loadError}
