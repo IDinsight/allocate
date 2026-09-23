@@ -46,6 +46,7 @@ enum Pillar {
   Advisory
   Internal
   Admin
+  Government
 }
 
 enum BillingRate {
@@ -62,6 +63,16 @@ enum ProjectStatus {
   Paused
   Archived
   Completed
+}
+
+enum FocusArea {
+  AI_enabled_Dashboards @map("AI-enabled Dashboards")
+  Public_Participation  @map("Public-Participation")
+  Education
+  CHW_AI                @map("CHW AI")
+  Benefits_AI            @map("Benefits AI")
+  Ecosystem
+  Not_a_focus_area       @map("Not a focus area")
 }
 
 // ─── Models ───────────────────────────────────────────────
@@ -89,6 +100,7 @@ model Project {
   id                    String        @id @default(cuid())
   name                  String
   pillar                Pillar?
+  focusArea             FocusArea?
   region                Region?
   billingRate           BillingRate?
   status                ProjectStatus @default(Upcoming)

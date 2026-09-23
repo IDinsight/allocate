@@ -43,17 +43,18 @@ export default function WatermarkBackground({
           patternUnits="userSpaceOnUse"
           patternTransform={`rotate(${rotation})`}
         >
-          <text
-            x="0"
-            y={baseline}
-            fontFamily="system-ui, sans-serif"
-            fontSize={fontSize}
-            fontWeight="700"
-            fill={color}
-            fillOpacity={opacity}
-          >
-            {text}
-          </text>
+          
+            <text
+              x="0"
+              y={baseline}
+              fontFamily="system-ui, sans-serif"
+              fontSize={fontSize}
+              fontWeight="700"
+              fill={color}
+              fillOpacity={opacity}
+            >
+              {text}
+            </text>
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`} />

@@ -18,6 +18,7 @@ type Teammate = { id: string; name: string };
 type ProjectFilters = {
   name: string;
   pillar: Set<string>;
+  focusArea: Set<string>;
   region: Set<string>;
   billingRate: Set<string>;
   status: Set<string>;
@@ -33,6 +34,7 @@ type ProjectFilters = {
 const EMPTY_FILTERS: ProjectFilters = {
   name: "",
   pillar: new Set(),
+  focusArea: new Set(),
   region: new Set(),
   billingRate: new Set(),
   status: new Set(),
@@ -49,6 +51,7 @@ function isFilterActive(filters: ProjectFilters): boolean {
   return (
     filters.name !== "" ||
     filters.pillar.size > 0 ||
+    filters.focusArea.size > 0 ||
     filters.region.size > 0 ||
     filters.billingRate.size > 0 ||
     filters.status.size > 0 ||
@@ -80,6 +83,17 @@ const PILLAR_OPTIONS = [
   { value: "Advisory", label: "Advisory" },
   { value: "Internal", label: "Internal" },
   { value: "Admin", label: "Admin" },
+];
+
+const FOCUS_AREA_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "AI_enabled_Dashboards", label: "AI-enabled Dashboards" },
+  { value: "Public_Participation", label: "Public-Participation" },
+  { value: "Education", label: "Education" },
+  { value: "CHW_AI", label: "CHW AI" },
+  { value: "Benefits_AI", label: "Benefits AI" },
+  { value: "Ecosystem", label: "Ecosystem" },
+  { value: "Not_a_focus_area", label: "Not a focus area" },
 ];
 
 const REGION_OPTIONS = [
@@ -155,6 +169,7 @@ export default function ProjectsTable({
     const passesCurrentFilters =
       (filters.name === "" || target.name.toLowerCase().includes(filters.name.toLowerCase())) &&
       (filters.pillar.size === 0 || filters.pillar.has(target.pillar ?? "")) &&
+      (filters.focusArea.size === 0 || filters.focusArea.has(target.focusArea ?? "")) &&
       (filters.region.size === 0 || filters.region.has(target.region ?? "")) &&
       (filters.billingRate.size === 0 || filters.billingRate.has(target.billingRate ?? "")) &&
       (filters.status.size === 0 || filters.status.has(target.status)) &&
@@ -192,6 +207,7 @@ export default function ProjectsTable({
     return list.filter((p) => {
       if (filters.name && !p.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
       if (filters.pillar.size > 0 && !filters.pillar.has(p.pillar ?? "")) return false;
+      if (filters.focusArea.size > 0 && !filters.focusArea.has(p.focusArea ?? "")) return false;
       if (filters.region.size > 0 && !filters.region.has(p.region ?? "")) return false;
       if (filters.billingRate.size > 0 && !filters.billingRate.has(p.billingRate ?? "")) return false;
       if (filters.conversionProbability.size > 0 && !filters.conversionProbability.has(String(p.conversionProbability ?? ""))) return false;
@@ -248,6 +264,7 @@ export default function ProjectsTable({
     { field: "name", label: "Name" },
     { field: "leadId", label: "Lead" },
     { field: "pillar", label: "Pillar" },
+    { field: "focusArea", label: "Focus Area" },
     { field: "region", label: "Region" },
     { field: "billingRate", label: "Rate" },
     { field: "status", label: "Status" },
@@ -268,6 +285,8 @@ export default function ProjectsTable({
         return <TextFilter value={filters.unit4Code} onChange={(v) => updateFilter("unit4Code", v)} placeholder="Search code..." />;
       case "pillar":
         return <MultiSelectFilter options={PILLAR_OPTIONS.filter((o) => o.value)} selected={filters.pillar} onChange={(v) => updateFilter("pillar", v)} />;
+      case "focusArea":
+        return <MultiSelectFilter options={FOCUS_AREA_OPTIONS.filter((o) => o.value)} selected={filters.focusArea} onChange={(v) => updateFilter("focusArea", v)} />;
       case "region":
         return <MultiSelectFilter options={REGION_OPTIONS.filter((o) => o.value)} selected={filters.region} onChange={(v) => updateFilter("region", v)} />;
       case "billingRate":
@@ -442,6 +461,12 @@ function ProjectRow({
             value={project.pillar ?? ""}
             options={PILLAR_OPTIONS}
             onSave={(v) => onUpdate(project.id, "pillar", v || null)}
+            disabled={isDraft}
+          />
+          <InlineSelect
+            value={project.focusArea ?? ""}
+            options={FOCUS_AREA_OPTIONS}
+            onSave={(v) => onUpdate(project.id, "focusArea", v || null)}
             disabled={isDraft}
           />
           <InlineSelect
