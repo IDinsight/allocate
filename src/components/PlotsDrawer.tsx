@@ -218,12 +218,13 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
     <>
       {/* Handle — when drawer is closed */}
       {!open && (
-        <div className="fixed left-1/3 -translate-x-1/2 bottom-0 z-[51]">
+        <div className="fixed left-1/3 -translate-x-1/2 -bottom-2 z-[51]">
           <button
             onClick={onOpen}
             disabled={disabled}
-            className={`btn-chunky flex items-center gap-2 rounded-b-none rounded-t-lg border-b-0 bg-blue-100 px-4 py-1.5 text-sm font-bold text-zinc-800 ${disabled ? "opacity-30 pointer-events-none" : ""}`}
+            className={`btn-chunky flex flex-col items-center rounded-b-none rounded-t-lg border-b-0 bg-blue-100 px-4 py-1.5 pb-4 text-md font-bold leading-none text-zinc-800 ${disabled ? "opacity-30 pointer-events-none" : ""}`}
           >
+            <span>{"^"}</span>
             📊
           </button>
         </div>
@@ -251,11 +252,13 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
           />
 
           {/* Handle — attached to top edge of panel */}
-          <div className="absolute left-1/3 -translate-x-1/2 -top-2 -translate-y-full z-[51]">
+          <div className="absolute left-1/3 -translate-x-1/2 top-2 -translate-y-full z-[51]">
             <button
               onClick={handleClose}
-              className="btn-chunky flex items-center gap-2 rounded-b-none rounded-t-lg border-b-0 bg-blue-100 px-4 py-1.5 text-sm font-bold text-zinc-800"
+              className="btn-chunky flex flex-col items-center rounded-b-none rounded-t-lg border-b-0 bg-blue-100 px-4 py-1.5 pb-4 text-md font-bold leading-none text-zinc-800"
             >
+              {/* Same caret as the closed handle, flipped to point down */}
+              <span className="rotate-180 pt-2">{"^"}</span>
               📊
             </button>
           </div>
