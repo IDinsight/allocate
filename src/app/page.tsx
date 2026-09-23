@@ -3,9 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import ProjectsSidebar from "@/components/ProjectsSidebar";
-import ProjectPlotsSidebar from "@/components/ProjectsPlotsSidebar";
 import TeammatesSidebar from "@/components/TeammatesSidebar";
-import TeammatePlotsSidebar from "@/components/TeammatePlotsSidebar";
+import PlotsDrawer from "@/components/PlotsDrawer";
 import WatermarkBackground from "@/components/WatermarkBackground";
 import Notepad from "@/components/Notepad";
 import AllocationView, { defaultFilters, type AllocationFilters } from "@/components/allocation/AllocationView";
@@ -23,18 +22,16 @@ import { signOut } from "@/lib/authClient";
 function HomeInner() {
   const canEdit = useCanEdit();
   const [projectsOpen, setProjectsOpen] = useState(false);
-  const [projectPlotsOpen, setProjectPlotsOpen] = useState(false);
+  const [plotsOpen, setPlotsOpen] = useState(false);
   // Focus request for the projects sidebar. `token` increments on each click
   // so re-focusing the same project retriggers the scroll effect inside the
   // sidebar rather than becoming a no-op state update.
   const [projectFocus, setProjectFocus] = useState<{ id: string; token: number } | null>(null);
   const [teammatesOpen, setTeammatesOpen] = useState(false);
-  const [teammatePlotsOpen, setTeammatePlotsOpen] = useState(false);
 
   const handleOpenProject = useCallback((projectId: string) => {
     setTeammatesOpen(false);
-    setProjectPlotsOpen(false);
-    setTeammatePlotsOpen(false);
+    setPlotsOpen(false);
     setProjectsOpen(true);
     setProjectFocus((prev) => ({ id: projectId, token: (prev?.token ?? 0) + 1 }));
   }, []);
@@ -331,52 +328,41 @@ function HomeInner() {
         open={projectsOpen}
         onClose={() => setProjectsOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectPlotsOpen(false); setTeammatePlotsOpen(false); setProjectsOpen(true); }}
+        onOpen={() => { setTeammatesOpen(false); setPlotsOpen(false); setProjectsOpen(true); }}
         projects={projects}
         setProjects={setProjects}
         teammates={teammates}
         disabled={dataLoading || loadError}
         focusProject={projectFocus}
-        siblingOpen={projectPlotsOpen}
-      />
-
-      {/* Project plots sidebar + handle (left) */}
-      <ProjectPlotsSidebar
-        open={projectPlotsOpen}
-        onClose={() => setProjectPlotsOpen(false)}
-        onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setTeammatePlotsOpen(false); setProjectPlotsOpen(true); }}
-        projects={projects}
-        allocations={allocations}
-        weekStarts={weekStarts}
-        disabled={dataLoading || loadError}
-        siblingOpen={projectsOpen}
+        siblingOpen={plotsOpen}
       />
 
       {/* Teammates sidebar + handle (right) */}
-      <TeammatePlotsSidebar
-        open={teammatePlotsOpen}
-        onClose={() => setTeammatePlotsOpen(false)}
-        onFlushed={() => fetchAll(true)}
-        onOpen={() => { setTeammatesOpen(false); setProjectsOpen(false); setProjectPlotsOpen(false); setTeammatePlotsOpen(true); }}
-        projects={projects}
-        allocations={allocations}
-        teammates={teammates}
-        weekStarts={weekStarts}
-        disabled={dataLoading || loadError}
-        siblingOpen={teammatesOpen}
-      />
-
       <TeammatesSidebar
         open={teammatesOpen}
         onClose={() => setTeammatesOpen(false)}
         onFlushed={() => fetchAll(true)}
-        onOpen={() => { setProjectsOpen(false); setProjectPlotsOpen(false); setTeammatePlotsOpen(false); setTeammatesOpen(true); }}
+        onOpen={() => { setProjectsOpen(false); setPlotsOpen(false); setTeammatesOpen(true); }}
         teammates={teammates}
         setTeammates={setTeammates}
         disabled={dataLoading || loadError}
-        siblingOpen={teammatePlotsOpen}
+        siblingOpen={plotsOpen}
       />
+
+      {/* Combined project/teammate plots drawer (bottom) */}
+      <PlotsDrawer
+        open={plotsOpen}
+        onClose={() => setPlotsOpen(false)}
+        onFlushed={() => fetchAll(true)}
+        onOpen={() => { setProjectsOpen(false); setTeammatesOpen(false); setPlotsOpen(true); }}
+        projects={projects}
+        teammates={teammates}
+        allocations={allocations}
+        weekStarts={weekStarts}
+        disabled={dataLoading || loadError}
+      />
+
+      
 
       {!dataLoading && !loadError && <Notepad />}
 

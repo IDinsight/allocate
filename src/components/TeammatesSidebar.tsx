@@ -24,7 +24,7 @@ interface Props {
   teammates: Teammate[];
   setTeammates: Dispatch<SetStateAction<Teammate[]>>;
   disabled?: boolean;
-  /** Whether the sibling TeammatePlotsSidebar panel is currently open — hides
+  /** Whether the sibling PlotsDrawer panel is currently open — hides
    * this sidebar's closed-state tab so it doesn't float above that panel. */
   siblingOpen?: boolean;
 }

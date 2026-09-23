@@ -77,6 +77,24 @@ body.drag-filling * {
   animation: slideOutRight 0.3s cubic-bezier(0.5, 0, 0.75, 0) forwards;
 }
 
+@keyframes slideInBottom {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideOutBottom {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.slide-in-bottom {
+  animation: slideInBottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.slide-out-bottom {
+  animation: slideOutBottom 0.25s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+}
+
 /* Wavy loading dots */
 @keyframes wavyBounce {
   0%, 100% { transform: translateY(0); }

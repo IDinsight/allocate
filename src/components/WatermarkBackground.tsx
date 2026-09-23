@@ -2,9 +2,6 @@ import { useId } from "react";
 
 interface Props {
   text: string;
-  imageSrc?: string;
-  imgTileWidth?: number;
-  imgTileHeight?: number;
   rotation?: number;
   fontSize?: number;
   opacity?: number;
@@ -19,9 +16,6 @@ interface Props {
  */
 export default function WatermarkBackground({
   text,
-  imageSrc,
-  imgTileWidth,
-  imgTileHeight,
   rotation = -45,
   fontSize = 16,
   opacity = 0.04,
@@ -44,14 +38,12 @@ export default function WatermarkBackground({
           id={patternId}
           x="0"
           y="0"
-          width={imgTileWidth ?? tileWidth}
-          height={imgTileHeight ?? tileHeight}
+          width={tileWidth}
+          height={tileHeight}
           patternUnits="userSpaceOnUse"
           patternTransform={`rotate(${rotation})`}
         >
-          {imageSrc ? (
-            <image href={imageSrc} x="0" y="0" width={imgTileWidth ?? tileWidth} height={imgTileHeight ?? tileHeight} opacity={opacity} preserveAspectRatio="xMidYMid slice"/>
-          ) : (
+          
             <text
               x="0"
               y={baseline}
@@ -63,7 +55,6 @@ export default function WatermarkBackground({
             >
               {text}
             </text>
-          )}
         </pattern>
       </defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`} />

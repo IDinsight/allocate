@@ -38,7 +38,7 @@ interface Props {
   /** Request from the parent to scroll to a specific project. `token` bumps
    * on each request so re-focusing the same project retriggers the scroll. */
   focusProject?: { id: string; token: number } | null;
-  /** Whether the sibling ProjectPlotsSidebar panel is currently open — hides
+  /** Whether the sibling PlotsDrawer panel is currently open — hides
    * this sidebar's closed-state tab so it doesn't float above that panel. */
   siblingOpen?: boolean;
 }
