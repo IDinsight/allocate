@@ -218,7 +218,7 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
     <>
       {/* Handle — when drawer is closed */}
       {!open && (
-        <div className="fixed left-1/3 -translate-x-1/2 -bottom-2 z-[51]">
+        <div className="fixed left-1/3 -translate-x-1/2 -bottom-2 z-[10]">
           <button
             onClick={onOpen}
             disabled={disabled}
