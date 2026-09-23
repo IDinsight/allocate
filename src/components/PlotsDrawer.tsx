@@ -244,11 +244,11 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
           className={`fixed inset-x-0 bottom-0 z-50 flex h-[82%] max-h-[900px] flex-col border-t-3 border-zinc-900 bg-white shadow-2xl ${closing ? "slide-out-bottom" : "slide-in-bottom"}`}
         >
           <WatermarkBackground
-            text="G R A P H S P L O T S"
+            text="G R A P H S"
             className="-z-10"
-            color={plotsView === "project" ? "purple" : "emerald"}
+            color={plotsView === "project" ? "purple" : "green"}
             opacity={0.3}
-            rotation={plotsView === "project" ? -26 : 32}
+            rotation={0}
           />
 
           {/* Handle — attached to top edge of panel */}
