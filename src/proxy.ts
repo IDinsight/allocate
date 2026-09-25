@@ -23,7 +23,8 @@ export async function proxy(req: NextRequest) {
   // /api/mcp authenticates itself with OAuth bearer tokens via withMcpAuth —
   // it must be excluded before the API-key check below, which would otherwise
   // eat the Authorization header and 401 without the WWW-Authenticate
-  // handshake MCP clients rely on. All /api/mcp tools are read-only.
+  // handshake MCP clients rely on. The write block below never runs there, so
+  // /api/mcp's write tools check the edit tier themselves (requireEdit).
   if (
     pathname === "/login" ||
     pathname.startsWith("/api/auth/") ||

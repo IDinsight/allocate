@@ -87,15 +87,27 @@ export async function getAllocations(filter: AllocationFilter) {
 
 // ─── Agent-facing grouped view ────────────────────────────
 
+export type ResolvedIds = {
+  /** Every matching id. A name shared by several rows contributes all of them. */
+  ids: string[];
+  /** Terms that matched nothing. */
+  unmatched: string[];
+  /** Names shared by more than one row, with the ids they matched. */
+  ambiguous: { term: string; ids: string[] }[];
+};
+
 // Resolves user-supplied filter terms — names or ids, case-insensitive on
-// names — to ids. Unmatched terms are returned so callers can reject typos
-// loudly instead of silently returning an empty result.
+// names — to ids. An exact id always wins over a name. Unmatched terms are
+// returned so callers can reject typos loudly instead of silently returning an
+// empty result. Names are not unique, so a name can match several rows: read
+// filters can use every match, but a write must refuse `ambiguous` terms
+// rather than pick one — see ambiguityError().
 export async function resolveFilterIds(
   kind: "teammate" | "project",
   terms: string[]
-): Promise<{ ids: string[]; unmatched: string[] }> {
+): Promise<ResolvedIds> {
   const cleaned = terms.map((t) => t.trim()).filter(Boolean);
-  if (cleaned.length === 0) return { ids: [], unmatched: [] };
+  if (cleaned.length === 0) return { ids: [], unmatched: [], ambiguous: [] };
 
   const rows: { id: string; name: string }[] =
     kind === "teammate"
@@ -104,15 +116,29 @@ export async function resolveFilterIds(
 
   const ids: string[] = [];
   const unmatched: string[] = [];
+  const ambiguous: ResolvedIds["ambiguous"] = [];
   for (const term of cleaned) {
+    const byId = rows.find((r) => r.id === term);
     const lower = term.toLowerCase();
-    const hit = rows.find(
-      (r) => r.id === term || r.name.toLowerCase() === lower
-    );
-    if (hit) ids.push(hit.id);
-    else unmatched.push(term);
+    const hits = byId
+      ? [byId]
+      : rows.filter((r) => r.name.toLowerCase() === lower);
+    if (hits.length === 0) unmatched.push(term);
+    if (hits.length > 1) ambiguous.push({ term, ids: hits.map((h) => h.id) });
+    ids.push(...hits.map((h) => h.id));
   }
-  return { ids, unmatched };
+  return { ids, unmatched, ambiguous };
+}
+
+/** Message for a write whose target name matched several rows. */
+export function ambiguityError(
+  kind: "teammate" | "project",
+  { term, ids }: ResolvedIds["ambiguous"][number]
+) {
+  return (
+    `"${term}" matches ${ids.length} ${kind}s (ids: ${ids.join(", ")}). ` +
+    `Pass the id of the one you mean.`
+  );
 }
 
 export type GroupBy = "teammate" | "project";

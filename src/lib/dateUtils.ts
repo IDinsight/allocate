@@ -65,9 +65,9 @@ export function generateWeekStarts(startMonday: string, count: number): string[]
 
 export function getYearStartMonday(year: number = new Date().getFullYear()): string {
   const jan1 = new Date(year, 0, 1);
-  const day = jan1.getDay();
-  const diff = 1 - day + (day === 0 ? -6 : 0);
-  const monday = new Date(year, 0, 1 + diff);
+  // Days back from Jan 1 to the Monday of its week: Mon 0, Tue 1, … Sun 6.
+  const back = (jan1.getDay() + 6) % 7;
+  const monday = new Date(year, 0, 1 - back);
   const y = monday.getFullYear();
   const m = String(monday.getMonth() + 1).padStart(2, "0");
   const d = String(monday.getDate()).padStart(2, "0");
@@ -77,4 +77,16 @@ export function getYearStartMonday(year: number = new Date().getFullYear()): str
 export function formatWeekLabel(weekStart: string): string {
   const date = new Date(weekStart + "T00:00:00");
   return String(date.getDate());
+}
+
+/** True for a real calendar date written as YYYY-MM-DD (rejects 2026-02-30). */
+export function isIsoDate(s: unknown): s is string {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().startsWith(s);
+}
+
+/** True for a YYYY-MM-DD date that falls on a Monday — the only valid weekStart. */
+export function isMonday(s: unknown): s is string {
+  return isIsoDate(s) && new Date(`${s}T00:00:00Z`).getUTCDay() === 1;
 }

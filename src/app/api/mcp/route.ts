@@ -6,11 +6,13 @@ import { z } from "zod";
 import { auth, resolveAccess, type Access } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  ambiguityError,
   getGroupedAllocations,
   listProjects,
   listTeammates,
   resolveFilterIds,
 } from "@/lib/queries";
+import { isIsoDate } from "@/lib/dateUtils";
 import { createProject, updateProject } from "@/lib/projectMutations";
 
 // MCP endpoint (streamable HTTP). This route is the sanctioned exception to
@@ -48,7 +50,7 @@ function requireEdit() {
 
 const DATE = z
   .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
+  .refine(isIsoDate, "Expected a real date as YYYY-MM-DD");
 
 const json = (data: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(data) }],
@@ -132,13 +134,17 @@ async function resolveLead(
   if (lead === undefined) return {};
   if (lead === null) return { leadId: null };
 
-  const { ids, unmatched } = await resolveFilterIds("teammate", [lead]);
+  const { ids, unmatched, ambiguous } = await resolveFilterIds("teammate", [lead]);
   if (unmatched.length > 0 || ids.length === 0) {
     return {
       error: toolError(
         `No teammate matches "${lead}". Check the name against list_team_members.`
       ),
     };
+  }
+  // A write must never guess between two people who share a name.
+  if (ambiguous.length > 0) {
+    return { error: toolError(ambiguityError("teammate", ambiguous[0])) };
   }
   return { leadId: ids[0] };
 }
@@ -256,7 +262,8 @@ const mcpHandler = createMcpHandler(
         title: "Update project",
         description:
           "Change fields on an existing project, identified by name " +
-          "(case-insensitive) or id. Only the fields you pass are touched; " +
+          "(case-insensitive) or id. If several projects share the name, " +
+          "the call is refused with their ids — retry with the right id. Only the fields you pass are touched; " +
           "everything else is left alone. Pass null to clear an optional " +
           "field. Requires an account with edit access — active IDinsight " +
           "team members only. This edits shared team data, so confirm the " +
@@ -274,12 +281,16 @@ const mcpHandler = createMcpHandler(
         if (denied) return denied;
 
         const { project: target, lead: leadTerm, ...fields } = input;
-        const { ids, unmatched } = await resolveFilterIds("project", [target]);
+        const { ids, unmatched, ambiguous } = await resolveFilterIds("project", [target]);
         if (unmatched.length > 0 || ids.length === 0) {
           return toolError(
             `No project matches "${target}". Check the name against ` +
               "list_projects."
           );
+        }
+        // Project names are not unique; refuse rather than edit the wrong one.
+        if (ambiguous.length > 0) {
+          return toolError(ambiguityError("project", ambiguous[0]));
         }
 
         const lead = await resolveLead(leadTerm);
@@ -356,11 +367,17 @@ const mcpHandler = createMcpHandler(
           teammates: z
             .array(z.string())
             .optional()
-            .describe("Only these teammates — names (case-insensitive) or ids."),
+            .describe(
+              "Only these teammates — names (case-insensitive) or ids. A name " +
+                "shared by several teammates includes all of them."
+            ),
           projects: z
             .array(z.string())
             .optional()
-            .describe("Only these projects — names (case-insensitive) or ids."),
+            .describe(
+              "Only these projects — names (case-insensitive) or ids. A name " +
+                "shared by several projects includes all of them."
+            ),
         }),
         annotations: readOnly,
       },

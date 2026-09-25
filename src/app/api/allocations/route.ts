@@ -5,6 +5,11 @@ import {
   getGroupedAllocations,
   resolveFilterIds,
 } from "@/lib/queries";
+import { isIsoDate, isMonday } from "@/lib/dateUtils";
+import { isValidFraction } from "@/lib/validation";
+
+const badRequest = (error: string) =>
+  NextResponse.json({ error }, { status: 400 });
 
 const split = (param: string | null) =>
   (param ?? "")
@@ -40,9 +45,17 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  const from = url.searchParams.get("from") ?? undefined;
+  const to = url.searchParams.get("to") ?? undefined;
+  for (const [name, value] of [["from", from], ["to", to]] as const) {
+    if (value !== undefined && !isIsoDate(value)) {
+      return badRequest(`${name} must be a date as YYYY-MM-DD`);
+    }
+  }
+
   const filter = {
-    from: url.searchParams.get("from") ?? undefined,
-    to: url.searchParams.get("to") ?? undefined,
+    from,
+    to,
     teammateIds: [...split(url.searchParams.get("teammateId")), ...t.ids],
     projectIds: [...split(url.searchParams.get("projectId")), ...p.ids],
   };
@@ -54,8 +67,23 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json();
-  const { teammateId, projectId, weekStart, fraction } = body;
+  const body = await req.json().catch(() => null);
+  const { teammateId, projectId, weekStart, fraction } = body ?? {};
+
+  if (typeof teammateId !== "string" || !teammateId) {
+    return badRequest("teammateId is required");
+  }
+  if (typeof projectId !== "string" || !projectId) {
+    return badRequest("projectId is required");
+  }
+  // Week columns are Mondays; any other day would render as a stray column.
+  if (!isMonday(weekStart)) {
+    return badRequest("weekStart must be a Monday as YYYY-MM-DD");
+  }
+  // As in the grid, 0 means "no allocation" — there is nothing to create.
+  if (!isValidFraction(fraction) || fraction === 0) {
+    return badRequest("fraction must be a whole number of percent, 1 or more");
+  }
 
   // Unhide existing allocations for this teammate-project pair
   await prisma.allocation.updateMany({
