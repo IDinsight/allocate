@@ -245,7 +245,7 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
           className={`fixed inset-x-0 bottom-0 z-50 flex h-[82%] max-h-[900px] flex-col border-t-3 border-zinc-900 bg-white shadow-2xl ${closing ? "slide-out-bottom" : "slide-in-bottom"}`}
         >
           <WatermarkBackground
-            text="G R A P H S"
+            text="P L O T S"
             className="-z-10"
             color={plotsView === "project" ? "purple" : "green"}
             opacity={0.3}
@@ -291,27 +291,27 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
             {plotsView === "project" ? (
               <>
                 <StackedBarChart
-                  title="Projects per Pillar by Month"
+                  title="Number of Projects by Pillar"
                   data={pillarCountData}
                   order={PILLAR_ORDER}
                   colors={PILLAR_COLORS}
                 />
                 <StackedBarChart
-                  title="Staff Allocation % per Pillar by Month"
+                  title="Allocation % by Pillar"
                   data={pillarAllocationData}
                   order={PILLAR_ORDER}
                   colors={PILLAR_COLORS}
                   valueFormatter={(v) => `${Math.round(v)}%`}
                 />
                 <StackedBarChart
-                  title="Projects per Focus Area by Month"
+                  title="Number of Projects by Focus Area"
                   data={focusAreaCountData}
                   order={FOCUS_AREA_ORDER}
                   colors={FOCUS_AREA_COLORS}
                   labels={FOCUS_AREA_LABELS}
                 />
                 <StackedBarChart
-                  title="Staff Allocation % per Focus Area by Month"
+                  title="Allocation % by Focus Area"
                   data={focusAreaAllocationData}
                   order={FOCUS_AREA_ORDER}
                   colors={FOCUS_AREA_COLORS}
@@ -323,14 +323,14 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
               <>
                 <SmallMultiplesChart
                   months={monthLabels}
-                  title="Projects per Teammate by Level by Month"
+                  title="Number of Projects by Level"
                   series={levelCountData}
                   order={LEVEL_ORDER}
                   colors={LEVEL_COLORS}
                 />
                 <SmallMultiplesChart
                   months={monthLabels}
-                  title="Staff Allocation % per Teammate by Level by Month"
+                  title="Allocation % by Level"
                   series={levelAllocationData}
                   order={LEVEL_ORDER}
                   colors={LEVEL_COLORS}
@@ -338,7 +338,7 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
                 />
                 <SmallMultiplesChart
                   months={monthLabels}
-                  title="Projects per Teammate by Role by Month"
+                  title="Number of Projects by Role"
                   integerTicks
                   series={roleCountData}
                   order={ROLE_ORDER}
@@ -346,7 +346,7 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
                 />
                 <SmallMultiplesChart
                   months={monthLabels}
-                  title="Staff Allocation % per Teammate by Role by Month"
+                  title="Allocation % by Role"
                   series={roleAllocationData}
                   order={ROLE_ORDER}
                   colors={ROLE_COLORS}
