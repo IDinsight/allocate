@@ -65,9 +65,9 @@ export function generateWeekStarts(startMonday: string, count: number): string[]
 
 export function getYearStartMonday(year: number = new Date().getFullYear()): string {
   const jan1 = new Date(year, 0, 1);
-  const day = jan1.getDay();
-  const diff = 1 - day + (day === 0 ? -6 : 0);
-  const monday = new Date(year, 0, 1 + diff);
+  // Days back from Jan 1 to the Monday of its week: Mon 0, Tue 1, … Sun 6.
+  const back = (jan1.getDay() + 6) % 7;
+  const monday = new Date(year, 0, 1 - back);
   const y = monday.getFullYear();
   const m = String(monday.getMonth() + 1).padStart(2, "0");
   const d = String(monday.getDate()).padStart(2, "0");

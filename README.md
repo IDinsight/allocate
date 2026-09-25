@@ -2,8 +2,8 @@
 
 Staff allocation tracker for IDinsight. Shows who is working on what, week by
 week, as an editable grid you can view by project or by teammate — plus project
-and teammate tables, a shared notepad, and a read-only JSON API for agents and
-scripts.
+and teammate tables, a shared notepad, a JSON API for scripts, and an MCP
+server for AI agents.
 
 Built with Next.js 16 (App Router), React 19, Tailwind 4, Prisma 7 against
 Postgres, and Better Auth for Google sign-in. three.js and React Three Fiber are
@@ -79,7 +79,8 @@ Read-only accounts may make GET and HEAD requests and nothing else.
 `src/proxy.ts` enforces this on every request and rejects writes with 403; the UI
 hides editing affordances to match, but the proxy is the boundary that counts.
 The one exception is `/api/mcp`, which authenticates itself with OAuth bearer
-tokens (see [MCP server](#mcp-server)) — its tools are all read-only.
+tokens (see [MCP server](#mcp-server)). The proxy's write block never runs
+there, so its two write tools re-check the caller's tier themselves.
 
 Tiers are resolved from the database per request rather than stored on the
 session, so both granting and revoking access take effect without signing out.
@@ -138,9 +139,21 @@ in sync whenever a route changes.
 ## MCP server
 
 MCP clients (Claude, Claude Code, MCP Inspector, …) can connect to
-`<origin>/api/mcp` over streamable HTTP for read-only tools: `list_projects`,
-`list_team_members`, and `get_allocations` (filterable by date range, teammate,
-or project). No key or pre-registration is needed — the app is its own OAuth
+`<origin>/api/mcp` over streamable HTTP. It serves five tools:
+
+| Tool | What it does | Who can use it |
+| --- | --- | --- |
+| `list_projects` | Every project, with its lead | Everyone |
+| `list_team_members` | Teammates, optionally filtered by status | Everyone |
+| `get_allocations` | Weekly allocations grouped by teammate or project, with per-week totals. Filterable by date range, teammate or project; without dates it covers about 3 months either side of today | Everyone |
+| `create_project` | Adds a project | Edit tier only |
+| `update_project` | Changes fields on a project, found by name or id | Edit tier only |
+
+Writes are limited to the projects table. Because the proxy doesn't cover
+`/api/mcp`, each write tool calls `requireEdit()` itself, and read-tier callers
+get a tool error instead of a write. Any new write tool must do the same.
+
+No key or pre-registration is needed — the app is its own OAuth
 2.1 authorization server (clients self-register via Dynamic Client
 Registration), and the user authenticates through the normal Google sign-in,
 with the same access tiers as the browser: `none`-tier accounts cannot
@@ -168,7 +181,32 @@ pnpm exec prisma migrate dev --name describe_your_change
 
 `prisma generate` runs automatically on install and build, emitting the client
 to `src/generated/prisma`. `data/seed.py` imports the original allocations
-spreadsheet into an empty database.
+spreadsheet into an empty database. `data/` is gitignored because it holds
+real staff data, so it isn't in the repo; ask a maintainer for a copy.
+
+## Tests
+
+```bash
+pnpm test
+```
+
+Runs the [Vitest](https://vitest.dev) suite (`src/**/*.test.ts`). It needs no
+database, Google credentials or `.env`: Prisma and Better Auth sessions are
+mocked, and `vitest.config.mts` supplies placeholder environment variables.
+
+The suite covers the parts where a silent regression would do real damage:
+
+- **Access control.** `src/proxy.ts` (public paths, read-only API keys, signed-out
+  and read-tier callers) and `resolveAccess` (the edit / read / none tiers).
+- **MCP write gating.** The `/api/mcp` write tools refuse read-tier callers
+  before touching the database, and revoked accounts and foreign origins are
+  turned away.
+- **Shared data logic.** Allocation grouping and totals in `src/lib/queries.ts`,
+  patch semantics in `src/lib/projectMutations.ts`, and week-start maths in
+  `src/lib/dateUtils.ts`.
+
+Add a test whenever you change auth, add an MCP write tool, or touch those
+modules.
 
 ## Deployment
 
