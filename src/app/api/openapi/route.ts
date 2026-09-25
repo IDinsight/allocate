@@ -273,7 +273,7 @@ const spec = {
             in: "query",
             required: false,
             description:
-              "Restrict to one or more teammates by name (case-insensitive) or id, comma-separated. Unknown terms return 400.",
+              "Restrict to one or more teammates by name (case-insensitive) or id, comma-separated. A name shared by several teammates includes all of them. Unknown terms return 400.",
             schema: { type: "string" },
           },
           {
@@ -281,7 +281,7 @@ const spec = {
             in: "query",
             required: false,
             description:
-              "Restrict to one or more projects by name (case-insensitive) or id, comma-separated. Unknown terms return 400.",
+              "Restrict to one or more projects by name (case-insensitive) or id, comma-separated. A name shared by several projects includes all of them. Unknown terms return 400.",
             schema: { type: "string" },
           },
           {
@@ -327,7 +327,7 @@ const spec = {
           },
           "400": {
             description:
-              "Invalid groupBy value, or a teammates/projects term matched nothing",
+              "Invalid groupBy value, from/to not a valid YYYY-MM-DD date, or a teammates/projects term matched nothing",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/Error" },
@@ -349,9 +349,14 @@ const spec = {
                 properties: {
                   teammateId: { type: "string" },
                   projectId: { type: "string" },
-                  weekStart: { type: "string", format: "date" },
+                  weekStart: {
+                    type: "string",
+                    format: "date",
+                    description: "Must be a Monday.",
+                  },
                   fraction: {
                     type: "integer",
+                    minimum: 1,
                     description: "Percentage points of the week (e.g. 50).",
                   },
                 },
@@ -365,6 +370,15 @@ const spec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/Allocation" },
+              },
+            },
+          },
+          "400": {
+            description:
+              "Missing teammateId/projectId, weekStart not a Monday, or fraction not a whole number of at least 1",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
               },
             },
           },
@@ -390,7 +404,7 @@ const spec = {
               schema: {
                 type: "object",
                 required: ["fraction"],
-                properties: { fraction: { type: "integer" } },
+                properties: { fraction: { type: "integer", minimum: 0 } },
               },
             },
           },
@@ -409,6 +423,14 @@ const spec = {
                     },
                   ],
                 },
+              },
+            },
+          },
+          "400": {
+            description: "fraction missing, negative or not a whole number",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Error" },
               },
             },
           },

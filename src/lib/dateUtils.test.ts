@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateWeekStarts, getYearStartMonday, groupWeeksByMonth } from "@/lib/dateUtils";
+import { generateWeekStarts, getYearStartMonday, groupWeeksByMonth, isIsoDate, isMonday } from "@/lib/dateUtils";
 
 // The grid's week columns must land on Mondays: allocations are keyed by a
 // Monday weekStart, so a column on any other day would never match a row.
@@ -40,5 +40,21 @@ describe("groupWeeksByMonth", () => {
       ["Sep 2026", 2],
       ["Oct 2026", 1],
     ]);
+  });
+});
+
+describe("isIsoDate / isMonday", () => {
+  it("accepts real YYYY-MM-DD dates only", () => {
+    expect(isIsoDate("2026-09-21")).toBe(true);
+    expect(isIsoDate("2024-02-29")).toBe(true); // leap day
+    for (const bad of ["notadate", "2026-02-30", "2026-13-01", "2026-9-21", "2026-09-21T00:00:00Z", "", 20260921, null]) {
+      expect(isIsoDate(bad)).toBe(false);
+    }
+  });
+
+  it("accepts Mondays only", () => {
+    expect(isMonday("2026-09-21")).toBe(true);
+    expect(isMonday("2026-10-01")).toBe(false); // a Thursday
+    expect(isMonday("notadate")).toBe(false);
   });
 });

@@ -104,11 +104,33 @@ describe("resolveFilterIds", () => {
     expect(await resolveFilterIds("teammate", ["t2", " ada demo ", "Nobody", ""])).toEqual({
       ids: ["t2", "t1"],
       unmatched: ["Nobody"],
+      ambiguous: [],
     });
   });
 
+  it("returns every row for a shared name and flags it as ambiguous", async () => {
+    projectFindMany.mockResolvedValue([
+      { id: "p1", name: "Education Dashboard" },
+      { id: "p2", name: "education dashboard" },
+      { id: "p3", name: "Other" },
+    ]);
+    expect(await resolveFilterIds("project", ["Education Dashboard"])).toEqual({
+      ids: ["p1", "p2"],
+      unmatched: [],
+      ambiguous: [{ term: "Education Dashboard", ids: ["p1", "p2"] }],
+    });
+  });
+
+  it("lets an exact id win over a name, so an id is never ambiguous", async () => {
+    projectFindMany.mockResolvedValue([
+      { id: "p1", name: "Dup" },
+      { id: "p2", name: "Dup" },
+    ]);
+    expect(await resolveFilterIds("project", ["p2"])).toEqual({ ids: ["p2"], unmatched: [], ambiguous: [] });
+  });
+
   it("skips the database when there is nothing to resolve", async () => {
-    expect(await resolveFilterIds("project", ["  "])).toEqual({ ids: [], unmatched: [] });
+    expect(await resolveFilterIds("project", ["  "])).toEqual({ ids: [], unmatched: [], ambiguous: [] });
     expect(projectFindMany).not.toHaveBeenCalled();
   });
 });

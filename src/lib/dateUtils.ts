@@ -78,3 +78,15 @@ export function formatWeekLabel(weekStart: string): string {
   const date = new Date(weekStart + "T00:00:00");
   return String(date.getDate());
 }
+
+/** True for a real calendar date written as YYYY-MM-DD (rejects 2026-02-30). */
+export function isIsoDate(s: unknown): s is string {
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().startsWith(s);
+}
+
+/** True for a YYYY-MM-DD date that falls on a Monday — the only valid weekStart. */
+export function isMonday(s: unknown): s is string {
+  return isIsoDate(s) && new Date(`${s}T00:00:00Z`).getUTCDay() === 1;
+}

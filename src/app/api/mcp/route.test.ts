@@ -29,12 +29,18 @@ vi.mock("@/lib/projectMutations", () => ({
   updateProject: (...a: unknown[]) => updateProject(...a),
 }));
 
-vi.mock("@/lib/queries", () => ({
+// Every name resolves to itself, except "Dup", which two rows share.
+const resolveFilterIds = async (_kind: string, terms: string[]) =>
+  terms[0] === "Dup"
+    ? { ids: ["x1", "x2"], unmatched: [], ambiguous: [{ term: "Dup", ids: ["x1", "x2"] }] }
+    : { ids: terms, unmatched: [], ambiguous: [] };
+
+vi.mock("@/lib/queries", async (importOriginal) => ({
+  ambiguityError: (await importOriginal<typeof import("@/lib/queries")>()).ambiguityError,
   listProjects: async () => [],
   listTeammates: async () => [],
   getGroupedAllocations: async () => ({ unit: "", byTeammate: {} }),
-  // Every name resolves to itself, so update_project always finds a target.
-  resolveFilterIds: async (_kind: string, terms: string[]) => ({ ids: terms, unmatched: [] }),
+  resolveFilterIds: (kind: string, terms: string[]) => resolveFilterIds(kind, terms),
 }));
 
 const { POST } = await import("@/app/api/mcp/route");
@@ -99,6 +105,24 @@ describe("MCP write tools", () => {
     const { body } = await callTool("update_project", { project: "p1", blurb: null });
     expect(body.result.isError).toBeFalsy();
     expect(updateProject).toHaveBeenCalledWith("p1", { blurb: null });
+  });
+});
+
+describe("MCP writes with a shared name", () => {
+  it("refuse to update when the project name matches several projects", async () => {
+    resolveAccess.mockResolvedValue("edit");
+    const { body } = await callTool("update_project", { project: "Dup", blurb: "x" });
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toMatch(/matches 2 projects \(ids: x1, x2\)/);
+    expect(updateProject).not.toHaveBeenCalled();
+  });
+
+  it("refuse to set a lead whose name matches several teammates", async () => {
+    resolveAccess.mockResolvedValue("edit");
+    const { body } = await callTool("create_project", { name: "New", lead: "Dup" });
+    expect(body.result.isError).toBe(true);
+    expect(body.result.content[0].text).toMatch(/matches 2 teammates/);
+    expect(createProject).not.toHaveBeenCalled();
   });
 });
 
