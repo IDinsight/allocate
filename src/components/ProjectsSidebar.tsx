@@ -38,8 +38,9 @@ interface Props {
   /** Request from the parent to scroll to a specific project. `token` bumps
    * on each request so re-focusing the same project retriggers the scroll. */
   focusProject?: { id: string; token: number } | null;
-  /** Whether the sibling PlotsDrawer panel is currently open — hides
-   * this sidebar's closed-state tab so it doesn't float above that panel. */
+  /** Whether the sibling PlotsDrawer panel is currently open — drops this
+   * sidebar's closed-state tab beneath that panel and its backdrop (z-40/50)
+   * instead of floating above it. */
   siblingOpen?: boolean;
 }
 
@@ -143,8 +144,10 @@ export default function ProjectsSidebar({ open, onClose, onOpen, onFlushed, proj
   return (
     <>
       {/* Handle — when sidebar is closed */}
-      {!open && !siblingOpen && (
-        <div className="fixed -left-0.5 top-1/3 -translate-y-1/2 z-[51]">
+      {/* Normally above everything (z-[51]) so it stays clickable over the
+          other sidebar's backdrop; tucked under the plots drawer when open. */}
+      {!open && (
+        <div className={`fixed -left-0.5 top-1/3 -translate-y-1/2 ${siblingOpen ? "z-[30]" : "z-[51]"}`}>
           <button
             onClick={onOpen}
             disabled={disabled}
