@@ -1,3 +1,5 @@
+import { monthTickText } from "./monthTicks";
+
 export type StackedBarSegment = {
   key: string;
   value: number;
@@ -37,6 +39,7 @@ export default function StackedBarChart({ title, data, order, colors, labels, va
   const axisMax = niceCeil(rawMax);
   const format = valueFormatter ?? ((v: number) => String(Math.round(v * 10) / 10));
   const ticks = Array.from({ length: TICK_COUNT + 1 }, (_, i) => (axisMax * i) / TICK_COUNT);
+  const tickText = monthTickText(data.map((d) => d.label));
 
   return (
     <div className="border-b-2 border-zinc-900 p-6">
@@ -100,12 +103,12 @@ export default function StackedBarChart({ title, data, order, colors, labels, va
 
           {/* Month labels */}
           <div className="mt-1 flex gap-3">
-            {data.map((d) => (
+            {data.map((d, i) => (
               <span
                 key={d.label}
-                className="min-w-[36px] flex-1 whitespace-nowrap text-center font-mono text-[10px] text-zinc-500"
+                className="min-w-[36px] flex-1 whitespace-pre text-center font-mono text-[10px] text-zinc-500"
               >
-                {d.label}
+                {tickText[i]}
               </span>
             ))}
           </div>

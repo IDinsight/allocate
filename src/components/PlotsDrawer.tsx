@@ -9,7 +9,7 @@ import { FOCUS_AREA_COLORS, FOCUS_AREA_LABELS, FOCUS_AREA_ORDER } from "@/lib/fo
 import { LEVEL_COLORS, LEVEL_ORDER } from "@/lib/levelColors";
 import { ROLE_COLORS, ROLE_ORDER } from "@/lib/roleColors";
 import StackedBarChart, { StackedBarDatum } from "./charts/StackedBarChart";
-import GroupedBarChart, { BarSeries } from "./charts/GroupedBarChart";
+import SmallMultiplesChart, { BandSeries, BandSeriesPoint } from "./charts/SmallMultiplesChart";
 
 type Teammate = { id: string; name: string };
 
@@ -126,14 +126,14 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
   // that month don't drag the average down; teammates with no level/role
   // set are excluded from the corresponding chart rather than bucketed.
   const buildTeammateMonthlySeries = useMemo(() => {
-    return (dimension: "level" | "role", metric: "count" | "allocation", order: string[]): BarSeries[] => {
+    return (dimension: "level" | "role", metric: "count" | "allocation", order: string[]): BandSeries[] => {
       const categoryByTeammateId = new Map<string, string>();
       for (const t of teammates) {
         const category = t[dimension];
         if (category) categoryByTeammateId.set(t.id, category);
       }
 
-      const pointsByCategory = new Map<string, { label: string; mean: number; std: number }[]>();
+      const pointsByCategory = new Map<string, BandSeriesPoint[]>();
       for (const category of order) pointsByCategory.set(category, []);
 
       for (const mg of monthGroups) {
@@ -190,7 +190,7 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
           if (!values || values.length === 0) continue;
           const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
           const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
-          pointsByCategory.get(category)!.push({ label: mg.label, mean, std: Math.sqrt(variance) });
+          pointsByCategory.get(category)!.push({ label: mg.label, mean, std: Math.sqrt(variance), n: values.length });
         }
       }
 
@@ -198,6 +198,7 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
     };
   }, [teammates, allocations, monthGroups]);
 
+  const monthLabels = useMemo(() => monthGroups.map((mg) => mg.label), [monthGroups]);
   const levelCountData = useMemo(() => buildTeammateMonthlySeries("level", "count", LEVEL_ORDER), [buildTeammateMonthlySeries]);
   const levelAllocationData = useMemo(() => buildTeammateMonthlySeries("level", "allocation", LEVEL_ORDER), [buildTeammateMonthlySeries]);
   const roleCountData = useMemo(() => buildTeammateMonthlySeries("role", "count", ROLE_ORDER), [buildTeammateMonthlySeries]);
@@ -320,26 +321,31 @@ export default function PlotsDrawer({ open, onClose, onOpen, onFlushed, projects
               </>
             ) : (
               <>
-                <GroupedBarChart
+                <SmallMultiplesChart
+                  months={monthLabels}
                   title="Projects per Teammate by Level by Month"
                   series={levelCountData}
                   order={LEVEL_ORDER}
                   colors={LEVEL_COLORS}
                 />
-                <GroupedBarChart
+                <SmallMultiplesChart
+                  months={monthLabels}
                   title="Staff Allocation % per Teammate by Level by Month"
                   series={levelAllocationData}
                   order={LEVEL_ORDER}
                   colors={LEVEL_COLORS}
                   valueFormatter={(v) => `${Math.round(v)}%`}
                 />
-                <GroupedBarChart
+                <SmallMultiplesChart
+                  months={monthLabels}
                   title="Projects per Teammate by Role by Month"
+                  integerTicks
                   series={roleCountData}
                   order={ROLE_ORDER}
                   colors={ROLE_COLORS}
                 />
-                <GroupedBarChart
+                <SmallMultiplesChart
+                  months={monthLabels}
                   title="Staff Allocation % per Teammate by Role by Month"
                   series={roleAllocationData}
                   order={ROLE_ORDER}

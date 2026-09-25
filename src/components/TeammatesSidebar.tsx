@@ -24,8 +24,9 @@ interface Props {
   teammates: Teammate[];
   setTeammates: Dispatch<SetStateAction<Teammate[]>>;
   disabled?: boolean;
-  /** Whether the sibling PlotsDrawer panel is currently open — hides
-   * this sidebar's closed-state tab so it doesn't float above that panel. */
+  /** Whether the sibling PlotsDrawer panel is currently open — drops this
+   * sidebar's closed-state tab beneath that panel and its backdrop (z-40/50)
+   * instead of floating above it. */
   siblingOpen?: boolean;
 }
 
@@ -120,8 +121,10 @@ export default function TeammatesSidebar({ open, onClose, onOpen, onFlushed, tea
   return (
     <>
       {/* Handle — when sidebar is closed */}
-      {!open && !siblingOpen && (
-        <div className="fixed -right-0.5 top-2/3 -translate-y-1/2 z-[51]">
+      {/* Normally above everything (z-[51]) so it stays clickable over the
+          other sidebar's backdrop; tucked under the plots drawer when open. */}
+      {!open && (
+        <div className={`fixed -right-0.5 top-2/3 -translate-y-1/2 ${siblingOpen ? "z-[30]" : "z-[51]"}`}>
           <button
             onClick={onOpen}
             disabled={disabled}
